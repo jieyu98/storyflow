@@ -37,10 +37,10 @@ export default function SceneCard({
           <span className="font-mono">
             {formatClock(scene.tStart)} → {formatClock(scene.tSpokenEnd)}
           </span>
-          <span className="chip">speech {formatClock(scene.span)}</span>
+          <span className="chip">{formatClock(scene.span)} on screen</span>
           {scene.clamped && (
             <span className="chip text-ember-300">
-              over {scene.assignedDuration}s — audio overflows
+              over {scene.assignedDuration}s — needs a longer max
             </span>
           )}
           {scene.characterIds?.map((id) => (

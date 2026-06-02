@@ -362,10 +362,10 @@ export default function Studio({ projectId }: { projectId: string }) {
               </p>
             ) : (
               <p className="text-xs text-faint">
-                The AI cuts the narration into visual beats; each clip rounds up
-                to a whole second for Kling.
+                The AI cuts the narration into visual beats; clips tile the whole
+                voiceover, each rounded up to a whole second for Kling.
                 {scenes.length > 0 &&
-                  ` ${scenes.length} beats · ${formatClock(coverage.totalSpoken)} speech.`}
+                  ` ${scenes.length} beats · ${formatClock(coverage.totalSpoken)} voiceover.`}
               </p>
             )}
 

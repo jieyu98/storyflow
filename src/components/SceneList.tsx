@@ -37,12 +37,12 @@ export default function SceneList({
     <div className="space-y-3">
       <div className="surface flex flex-wrap items-center gap-x-5 gap-y-1 px-5 py-3 text-xs text-muted">
         <Stat label="scenes" value={String(scenes.length)} />
-        <Stat label="clip total" value={`${coverage.totalClip}s`} />
-        <Stat label="speech" value={formatClock(coverage.totalSpoken)} />
+        <Stat label="video total" value={`${coverage.totalClip}s`} />
+        <Stat label="voiceover" value={formatClock(coverage.totalSpoken)} />
         <Stat
-          label="silent padding"
-          value={`${coverage.padding.toFixed(1)}s`}
-          warn={coverage.padding > coverage.totalSpoken * 0.25}
+          label="round-up"
+          value={`+${coverage.padding.toFixed(1)}s`}
+          warn={coverage.padding > 3}
         />
         {allHavePrompts && (
           <CopyButton text={allText} label="Copy all" className="ml-auto" />
