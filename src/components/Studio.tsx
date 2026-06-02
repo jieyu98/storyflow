@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { wordsFromAlignment, audioDurationFromWords } from "@/lib/alignment";
-import { cutScenes, sceneCoverage } from "@/lib/scenes";
+import { sceneCoverage } from "@/lib/scenes";
 import {
   base64ToMp3Blob,
   getAudio,
@@ -13,8 +13,7 @@ import {
 } from "@/lib/storage";
 import { formatClock } from "@/lib/text";
 import {
-  ALL_DURATIONS,
-  type Duration,
+  DEFAULT_MAX_CLIP_SECONDS,
   type Project,
   type Scene,
   type TtsModelId,
@@ -23,18 +22,8 @@ import ScriptCard from "./ScriptCard";
 import VisualBibleView from "./VisualBibleView";
 import VoicePicker from "./VoicePicker";
 import VoiceoverPlayer from "./VoiceoverPlayer";
-import DurationSelector from "./DurationSelector";
 import SceneList from "./SceneList";
 import { ArrowIcon, FilmIcon, MicIcon, SparkIcon, Spinner } from "./icons";
-
-type PromptEntry = {
-  imagePrompt: string;
-  animationPrompt: string;
-  characterIds?: string[];
-};
-
-const sceneKey = (s: { startWord: number; endWord: number }) =>
-  `${s.startWord}:${s.endWord}`;
 
 export default function Studio({ projectId }: { projectId: string }) {
   const [project, setProject] = useState<Project | null | undefined>(undefined);
@@ -45,8 +34,8 @@ export default function Studio({ projectId }: { projectId: string }) {
   const [voiceId, setVoiceId] = useState<string | undefined>();
   const [voiceName, setVoiceName] = useState<string | undefined>();
   const [model, setModel] = useState<TtsModelId>("eleven_multilingual_v2");
-  const [allowed, setAllowed] = useState<Duration[]>([...ALL_DURATIONS]);
-  const [promptMap, setPromptMap] = useState<Record<string, PromptEntry>>({});
+  const [maxClip, setMaxClip] = useState(DEFAULT_MAX_CLIP_SECONDS);
+  const [scenes, setScenes] = useState<Scene[]>([]);
   const [audioUrl, setAudioUrl] = useState<string | null>(null);
   const audioUrlRef = useRef<string | null>(null);
 
@@ -69,22 +58,8 @@ export default function Studio({ projectId }: { projectId: string }) {
     setVoiceId(p.voiceId);
     setVoiceName(p.voiceName);
     setModel((p.modelId as TtsModelId) ?? "eleven_multilingual_v2");
-    setAllowed(
-      p.allowedDurations?.length ? p.allowedDurations : [...ALL_DURATIONS],
-    );
-    if (p.scenes?.length) {
-      const m: Record<string, PromptEntry> = {};
-      for (const s of p.scenes) {
-        if (s.imagePrompt) {
-          m[sceneKey(s)] = {
-            imagePrompt: s.imagePrompt,
-            animationPrompt: s.animationPrompt ?? "",
-            characterIds: s.characterIds,
-          };
-        }
-      }
-      setPromptMap(m);
-    }
+    setMaxClip(p.maxClipSeconds ?? DEFAULT_MAX_CLIP_SECONDS);
+    setScenes(p.scenes ?? []);
     if (p.hasAudio) {
       void getAudio(projectId).then((blob) => {
         if (blob) setAudioUrlSafe(URL.createObjectURL(blob));
@@ -116,23 +91,7 @@ export default function Studio({ projectId }: { projectId: string }) {
     () => (project?.alignment ? wordsFromAlignment(project.alignment) : []),
     [project?.alignment],
   );
-
-  const baseScenes = useMemo(
-    () => (words.length ? cutScenes(words, allowed) : []),
-    [words, allowed],
-  );
-
-  const scenes: Scene[] = useMemo(
-    () =>
-      baseScenes.map((s) => {
-        const p = promptMap[sceneKey(s)];
-        return p ? { ...s, ...p } : s;
-      }),
-    [baseScenes, promptMap],
-  );
-
-  const coverage = useMemo(() => sceneCoverage(baseScenes), [baseScenes]);
-  const somePrompts = scenes.some((s) => s.imagePrompt);
+  const coverage = useMemo(() => sceneCoverage(scenes), [scenes]);
   const scriptDirty =
     project?.voicedScript != null && project.voicedScript !== script;
 
@@ -146,6 +105,12 @@ export default function Studio({ projectId }: { projectId: string }) {
     const t = title.trim() || "Untitled story";
     setTitle(t);
     save((p) => ({ ...p, title: t }));
+  }
+
+  function handleMaxClip(v: number) {
+    const clamped = Math.max(3, Math.min(15, Math.round(v || DEFAULT_MAX_CLIP_SECONDS)));
+    setMaxClip(clamped);
+    save((p) => ({ ...p, maxClipSeconds: clamped }));
   }
 
   async function handleRegenerateScript() {
@@ -196,7 +161,7 @@ export default function Studio({ projectId }: { projectId: string }) {
 
       const w = wordsFromAlignment(data.alignment);
       const duration = audioDurationFromWords(w);
-      setPromptMap({}); // timings changed → drop stale prompts
+      setScenes([]); // timings changed → previous cut is stale
       save((p) => ({
         ...p,
         script,
@@ -216,56 +181,27 @@ export default function Studio({ projectId }: { projectId: string }) {
     }
   }
 
-  function handleAllowed(next: Duration[]) {
-    setAllowed(next);
-    const base = words.length ? cutScenes(words, next) : [];
-    const merged = base.map((s) => {
-      const p = promptMap[sceneKey(s)];
-      return p ? { ...s, ...p } : s;
-    });
-    save((p) => ({ ...p, allowedDurations: next, scenes: merged }));
-  }
-
-  async function handlePrompts() {
-    if (!project || baseScenes.length === 0) return;
+  async function handleGenerateScenes() {
+    if (!project || words.length === 0) return;
     setError(null);
     setCutting(true);
     try {
-      const payload = baseScenes.map((s) => ({
-        index: s.index,
-        text: s.text,
-        assignedDuration: s.assignedDuration,
-      }));
       const res = await fetch("/api/scenes", {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
-          scenes: payload,
+          words,
           visualBible: project.visualBible,
+          maxSeconds: maxClip,
         }),
       });
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error ?? "Could not write prompts.");
-
-      const map: Record<string, PromptEntry> = { ...promptMap };
-      for (const sp of data.scenes ?? []) {
-        const s = baseScenes[sp.index];
-        if (s) {
-          map[sceneKey(s)] = {
-            imagePrompt: sp.imagePrompt,
-            animationPrompt: sp.animationPrompt,
-            characterIds: sp.characterIds,
-          };
-        }
-      }
-      setPromptMap(map);
-      const merged = baseScenes.map((s) => {
-        const p = map[sceneKey(s)];
-        return p ? { ...s, ...p } : s;
-      });
-      save((p) => ({ ...p, allowedDurations: allowed, scenes: merged }));
+      if (!res.ok) throw new Error(data.error ?? "Could not cut scenes.");
+      const next: Scene[] = data.scenes ?? [];
+      setScenes(next);
+      save((p) => ({ ...p, maxClipSeconds: maxClip, scenes: next }));
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Could not write prompts.");
+      setError(e instanceof Error ? e.message : "Could not cut scenes.");
     } finally {
       setCutting(false);
     }
@@ -301,11 +237,7 @@ export default function Studio({ projectId }: { projectId: string }) {
     <div className="relative z-[1] mx-auto max-w-5xl px-5 pb-28 pt-6">
       {/* top bar */}
       <header className="flex items-center gap-3">
-        <Link
-          href="/"
-          className="btn btn-ghost !px-2.5 !py-2"
-          aria-label="Back"
-        >
+        <Link href="/" className="btn btn-ghost !px-2.5 !py-2" aria-label="Back">
           <ArrowIcon width={16} height={16} className="rotate-180" />
         </Link>
         <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-gradient-to-b from-ember-400 to-ember-600 text-[#25150a]">
@@ -380,7 +312,7 @@ export default function Studio({ projectId }: { projectId: string }) {
               <VoiceoverPlayer
                 src={audioUrl}
                 duration={project.audioDuration}
-                scenes={baseScenes}
+                scenes={scenes}
                 title={project.title}
               />
             )}
@@ -392,43 +324,65 @@ export default function Studio({ projectId }: { projectId: string }) {
             )}
           </section>
 
-          {/* Scene timing */}
+          {/* Scenes */}
           <section className="surface space-y-4 p-5">
             <p className="eyebrow flex items-center gap-2">
-              <FilmIcon width={14} height={14} /> Scene timing
+              <FilmIcon width={14} height={14} /> Scenes
             </p>
 
-            <div>
-              <p className="mb-2 text-xs text-faint">Allowed clip lengths</p>
-              <DurationSelector allowed={allowed} onChange={handleAllowed} />
+            <div className="flex items-center justify-between">
+              <span className="text-xs text-faint">Max clip length</span>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => handleMaxClip(maxClip - 1)}
+                  className="btn btn-ghost !px-3 !py-1.5"
+                  aria-label="Decrease max clip length"
+                >
+                  −
+                </button>
+                <span className="w-12 text-center font-mono text-sm text-cream">
+                  {maxClip}s
+                </span>
+                <button
+                  type="button"
+                  onClick={() => handleMaxClip(maxClip + 1)}
+                  className="btn btn-ghost !px-3 !py-1.5"
+                  aria-label="Increase max clip length"
+                >
+                  +
+                </button>
+              </div>
             </div>
 
             {!hasAudio ? (
               <p className="text-xs text-faint">
-                Generate a voiceover first — scenes are cut from its word
-                timestamps.
+                Generate a voiceover first — the AI reads its timestamps to cut
+                beats.
               </p>
             ) : (
               <p className="text-xs text-faint">
-                {baseScenes.length} scenes from{" "}
-                {formatClock(coverage.totalSpoken)} of speech.
+                The AI cuts the narration into visual beats; each clip rounds up
+                to a whole second for Kling.
+                {scenes.length > 0 &&
+                  ` ${scenes.length} beats · ${formatClock(coverage.totalSpoken)} speech.`}
               </p>
             )}
 
             <button
               type="button"
-              onClick={handlePrompts}
-              disabled={cutting || baseScenes.length === 0}
+              onClick={handleGenerateScenes}
+              disabled={cutting || words.length === 0}
               className="btn btn-ember w-full"
             >
               {cutting ? (
                 <>
-                  <Spinner width={16} height={16} /> Writing scene prompts…
+                  <Spinner width={16} height={16} /> Cutting scenes…
                 </>
-              ) : somePrompts ? (
-                "Rewrite scene prompts"
+              ) : scenes.length > 0 ? (
+                "Regenerate scenes"
               ) : (
-                "Write scene prompts"
+                "Generate scenes"
               )}
             </button>
           </section>

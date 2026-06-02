@@ -3,14 +3,10 @@
 // allowed-duration set. Scenes are still cut deterministically from the real
 // voiceover timestamps; these presets only shape *how the narration is written*.
 
-import { ALL_DURATIONS, type Duration } from "./types";
-
 export type ScriptStyle = {
   id: string;
   name: string;
   tagline: string;
-  /** Seeds a new project's allowed clip lengths; the user can still change them. */
-  defaultDurations: Duration[];
   system: string;
 };
 
@@ -25,7 +21,6 @@ const NEUTRAL: ScriptStyle = {
   id: "neutral",
   name: "Straight narrator",
   tagline: "Faithful, punchy retelling of the source",
-  defaultDurations: [...ALL_DURATIONS],
   system: `You are a short-form video scriptwriter for TikTok and YouTube Shorts. You turn pasted text (usually a Reddit post or story) into a tight, spoken narration script.
 
 Write the SCRIPT:
@@ -44,7 +39,6 @@ const RECOGNITION: ScriptStyle = {
   id: "recognition",
   name: "Recognition shorts",
   tagline: "Naming what people feel but never say out loud",
-  defaultDurations: [6, 10],
   system: `ROLE
 You are a scriptwriter for a short-form animated storytelling channel. You turn raw emotional source material — Reddit posts, vents, confessions, personal stories — into narrated scripts for 60–90 second vertical animated shorts.
 

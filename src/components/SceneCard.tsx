@@ -38,11 +38,10 @@ export default function SceneCard({
             {formatClock(scene.tStart)} → {formatClock(scene.tSpokenEnd)}
           </span>
           <span className="chip">speech {formatClock(scene.span)}</span>
-          {scene.softCut && (
-            <span className="chip text-ember-300">mid-sentence cut</span>
-          )}
-          {scene.overflow && (
-            <span className="chip text-ember-300">overflow</span>
+          {scene.clamped && (
+            <span className="chip text-ember-300">
+              over {scene.assignedDuration}s — audio overflows
+            </span>
           )}
           {scene.characterIds?.map((id) => (
             <span key={id} className="chip text-twilight-300">
@@ -51,7 +50,13 @@ export default function SceneCard({
           ))}
         </div>
 
-        <p className="mt-3 text-sm leading-relaxed text-cream/90">
+        {scene.name && (
+          <h4 className="mt-2 font-display text-base font-semibold text-cream">
+            {scene.name}
+          </h4>
+        )}
+
+        <p className="mt-1.5 text-sm leading-relaxed text-cream/90">
           {scene.text}
         </p>
 

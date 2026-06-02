@@ -6,18 +6,14 @@ import PresetCards, { type PresetOption } from "@/components/PresetCards";
 import ProjectList from "@/components/ProjectList";
 import { ArrowIcon, SparkIcon, Spinner } from "@/components/icons";
 import { ART_STYLES, DEFAULT_STYLE_ID } from "@/lib/styles";
-import {
-  DEFAULT_SCRIPT_STYLE_ID,
-  SCRIPT_STYLES,
-  getScriptStyle,
-} from "@/lib/scriptStyles";
+import { DEFAULT_SCRIPT_STYLE_ID, SCRIPT_STYLES } from "@/lib/scriptStyles";
 import {
   deleteProject,
   listProjects,
   newProjectId,
   upsertProject,
 } from "@/lib/storage";
-import { type Project } from "@/lib/types";
+import { DEFAULT_MAX_CLIP_SECONDS, type Project } from "@/lib/types";
 import { countWords } from "@/lib/text";
 
 export default function HomePage() {
@@ -66,7 +62,7 @@ export default function HomePage() {
         visualBible: data.visualBible ?? { characters: [], locations: [] },
         scriptStyleId,
         stylePresetId: styleId,
-        allowedDurations: [...getScriptStyle(scriptStyleId).defaultDurations],
+        maxClipSeconds: DEFAULT_MAX_CLIP_SECONDS,
         scenes: [],
       };
       upsertProject(project);

@@ -1,8 +1,7 @@
 // Shared domain types for StoryFlow.
 
-export type Duration = 4 | 6 | 8 | 10;
-
-export const ALL_DURATIONS: Duration[] = [4, 6, 8, 10];
+/** Default cap on a single clip's length (seconds); one still drifts past this. */
+export const DEFAULT_MAX_CLIP_SECONDS = 10;
 
 /** A single spoken word with its time span (seconds) on the voiceover timeline. */
 export type Word = {
@@ -36,7 +35,7 @@ export type VisualBible = {
   locations: BibleLocation[];
 };
 
-/** A timed scene cut from the narration. Prompts are filled in by /api/scenes. */
+/** An AI-authored visual beat with exact timing read from the voiceover. */
 export type Scene = {
   index: number;
   startWord: number;
@@ -47,13 +46,13 @@ export type Scene = {
   tSpokenEnd: number;
   /** Spoken span = tSpokenEnd - tStart. */
   span: number;
-  /** Clip length chosen from the allowed durations, >= span. */
-  assignedDuration: Duration;
+  /** Integer clip length in seconds = min(ceil(span), maxClipSeconds). */
+  assignedDuration: number;
   text: string;
-  /** True when the scene ended on a non-sentence boundary (mid-clause cut). */
-  softCut?: boolean;
-  /** True when a single word was longer than the largest allowed duration. */
-  overflow?: boolean;
+  /** Short 2-4 word beat name from the AI. */
+  name?: string;
+  /** True when span exceeds the max clip length (audio would overflow the clip). */
+  clamped?: boolean;
   /** Starting-frame description (style preset is appended at display time). */
   imagePrompt?: string;
   /** Motion + camera description for image-to-video tools. */
@@ -86,7 +85,8 @@ export type Project = {
   audioDuration?: number;
   /** Whether a voiceover blob exists in IndexedDB for this project. */
   hasAudio?: boolean;
-  allowedDurations: Duration[];
+  /** Max clip length (seconds) the AI must keep each beat within. */
+  maxClipSeconds?: number;
   scenes?: Scene[];
 };
 

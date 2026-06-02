@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
-import { generateScenePrompts } from "@/lib/anthropic";
+import { generateSceneBeats } from "@/lib/anthropic";
+import { buildScenesFromBeats } from "@/lib/scenes";
 import { apiError } from "@/lib/http";
-import type { VisualBible } from "@/lib/types";
+import { DEFAULT_MAX_CLIP_SECONDS, type VisualBible, type Word } from "@/lib/types";
 
 export const runtime = "nodejs";
 export const maxDuration = 120;
@@ -11,25 +12,29 @@ const EMPTY_BIBLE: VisualBible = { characters: [], locations: [] };
 export async function POST(req: Request) {
   try {
     const body = (await req.json()) as {
-      scenes?: { index: number; text: string; assignedDuration: number }[];
+      words?: Word[];
       visualBible?: VisualBible;
+      maxSeconds?: number;
     };
-    const scenes = Array.isArray(body.scenes) ? body.scenes : [];
-    if (scenes.length === 0) {
+    const words = Array.isArray(body.words) ? body.words : [];
+    if (words.length === 0) {
       return NextResponse.json(
-        { error: "No scenes to write prompts for." },
+        { error: "Generate a voiceover first — there are no timestamps to cut." },
         { status: 400 },
       );
     }
-    const prompts = await generateScenePrompts(
-      scenes.map((s) => ({
-        index: s.index,
-        text: s.text,
-        assignedDuration: s.assignedDuration as 4 | 6 | 8 | 10,
-      })),
+    const maxSeconds =
+      typeof body.maxSeconds === "number" && body.maxSeconds > 0
+        ? Math.round(body.maxSeconds)
+        : DEFAULT_MAX_CLIP_SECONDS;
+
+    const beats = await generateSceneBeats(
+      words,
       body.visualBible ?? EMPTY_BIBLE,
+      maxSeconds,
     );
-    return NextResponse.json({ scenes: prompts });
+    const scenes = buildScenesFromBeats(words, beats, maxSeconds);
+    return NextResponse.json({ scenes });
   } catch (err) {
     return apiError(err);
   }

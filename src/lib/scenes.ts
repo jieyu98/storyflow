@@ -1,134 +1,94 @@
-import { ALL_DURATIONS, type Duration, type Scene, type Word } from "./types";
+import { type Scene, type Word } from "./types";
 
-// Trailing punctuation that ends a sentence vs. a softer clause break.
-const SENTENCE_END = /[.!?…]["'”’)\]]?$/;
-const CLAUSE_END = /[,;:—–]["'”’)\]]?$/;
+/** One AI-chosen beat, identified by the word index it ends on, plus its prompts. */
+export type SceneBeat = {
+  endWord: number;
+  name?: string;
+  imagePrompt?: string;
+  animationPrompt?: string;
+  characterIds?: string[];
+};
 
-function isSentenceEnd(word: Word): boolean {
-  return SENTENCE_END.test(word.text);
+/** Numbered word list with cumulative end-times, fed to the beat-cutting prompt. */
+export function numberedWords(words: Word[]): string {
+  return words.map((w, i) => `[${i}] ${w.text} (${w.end.toFixed(1)}s)`).join(" ");
 }
 
-function isClauseEnd(word: Word): boolean {
-  return CLAUSE_END.test(word.text);
+/** Integer clip length that always covers the speech, capped at the max. */
+function clipSeconds(span: number, maxSeconds: number): number {
+  return Math.min(Math.ceil(span - 0.001), maxSeconds);
 }
 
-/** Sort, de-dupe and validate the allowed set; fall back to all four. */
-export function normalizeAllowed(allowed: Duration[]): Duration[] {
-  const valid = ALL_DURATIONS.filter((d) => allowed.includes(d));
-  const set = valid.length > 0 ? valid : ALL_DURATIONS;
-  return [...set].sort((a, b) => a - b);
-}
-
-/** Smallest allowed clip length that covers the spoken span; else the largest. */
-export function chooseDuration(span: number, allowed: Duration[]): Duration {
-  for (const d of allowed) {
-    if (d >= span - 0.001) return d;
-  }
-  return allowed[allowed.length - 1];
-}
-
-/** Latest index in (from..to] where predicate holds, or -1. */
-function lastIndexWhere(
+function makeScene(
   words: Word[],
-  from: number,
-  to: number,
-  pred: (w: Word) => boolean,
-): number {
-  for (let i = to; i > from; i--) {
-    if (pred(words[i])) return i;
-  }
-  // Allow a boundary exactly at `from` only when it's a single-word window.
-  if (from === to && pred(words[from])) return from;
-  return -1;
-}
-
-function joinWords(words: Word[], from: number, to: number): string {
-  return words
-    .slice(from, to + 1)
-    .map((w) => w.text)
-    .join(" ");
+  index: number,
+  start: number,
+  end: number,
+  maxSeconds: number,
+  beat: Partial<SceneBeat>,
+): Scene {
+  const tStart = words[start].start;
+  const tSpokenEnd = words[end].end;
+  const span = tSpokenEnd - tStart;
+  return {
+    index,
+    startWord: start,
+    endWord: end,
+    tStart,
+    tSpokenEnd,
+    span,
+    assignedDuration: clipSeconds(span, maxSeconds),
+    clamped: span > maxSeconds + 0.05,
+    text: words
+      .slice(start, end + 1)
+      .map((w) => w.text)
+      .join(" "),
+    name: beat.name,
+    imagePrompt: beat.imagePrompt,
+    animationPrompt: beat.animationPrompt,
+    characterIds: beat.characterIds,
+  };
 }
 
 /**
- * Deterministically partition narration words into contiguous scenes. Each
- * scene is assigned a clip length from `allowed`; breaks prefer sentence ends,
- * then clause ends, then a hard word boundary. Timestamps are authoritative —
- * no AI is involved in choosing cut points.
+ * Turn the AI's ordered beats (each marking the word it ends on) into contiguous
+ * scenes with EXACT timing read from the word timestamps. Robust to minor index
+ * slips: ranges are forced contiguous and the final scene always reaches the end.
  */
-export function cutScenes(words: Word[], allowedRaw: Duration[]): Scene[] {
-  const allowed = normalizeAllowed(allowedRaw);
-  const dMax = allowed[allowed.length - 1];
-  const dMin = allowed[0];
+export function buildScenesFromBeats(
+  words: Word[],
+  beats: SceneBeat[],
+  maxSeconds: number,
+): Scene[] {
+  if (words.length === 0) return [];
+  const last = words.length - 1;
+  const ordered = [...beats].sort((a, b) => a.endWord - b.endWord);
+
   const scenes: Scene[] = [];
-
-  let s = 0;
-  while (s < words.length) {
-    const sceneStart = words[s].start;
-
-    // Furthest word that still fits within the largest allowed duration.
-    let e = s;
-    while (e + 1 < words.length && words[e + 1].end - sceneStart <= dMax) {
-      e++;
-    }
-
-    let cutAt: number;
-    let softCut = false;
-    let overflow = false;
-
-    if (e === s && words[s].end - sceneStart > dMax) {
-      // A single word longer than the largest clip — take it alone.
-      cutAt = s;
-      overflow = true;
-    } else {
-      const sentenceCut = lastIndexWhere(words, s, e, isSentenceEnd);
-      if (sentenceCut !== -1) {
-        cutAt = sentenceCut;
-      } else {
-        const clauseCut = lastIndexWhere(words, s, e, isClauseEnd);
-        if (clauseCut !== -1) {
-          cutAt = clauseCut;
-          softCut = true;
-        } else {
-          cutAt = e;
-          softCut = true;
-        }
-      }
-    }
-
-    const span = words[cutAt].end - sceneStart;
-    scenes.push({
-      index: scenes.length,
-      startWord: s,
-      endWord: cutAt,
-      tStart: sceneStart,
-      tSpokenEnd: words[cutAt].end,
-      span,
-      assignedDuration: chooseDuration(span, allowed),
-      text: joinWords(words, s, cutAt),
-      softCut,
-      overflow,
-    });
-
-    s = cutAt + 1;
+  let start = 0;
+  for (const beat of ordered) {
+    if (start > last) break;
+    const raw = Math.round(beat.endWord);
+    if (!Number.isFinite(raw)) continue;
+    const end = Math.max(start, Math.min(raw, last));
+    scenes.push(makeScene(words, scenes.length, start, end, maxSeconds, beat));
+    start = end + 1;
   }
 
-  // Merge a stubby final scene into the previous one when it stays within dMax.
-  if (scenes.length >= 2) {
-    const last = scenes[scenes.length - 1];
-    const prev = scenes[scenes.length - 2];
-    const mergedSpan = last.tSpokenEnd - prev.tStart;
-    if (last.span < dMin && mergedSpan <= dMax) {
-      scenes.pop();
-      scenes[scenes.length - 1] = {
-        ...prev,
-        endWord: last.endWord,
-        tSpokenEnd: last.tSpokenEnd,
-        span: mergedSpan,
-        assignedDuration: chooseDuration(mergedSpan, allowed),
-        text: `${prev.text} ${last.text}`,
-        softCut: last.softCut,
-        overflow: prev.overflow || last.overflow,
-      };
+  // Guarantee full coverage to the last word.
+  if (start <= last) {
+    if (scenes.length > 0) {
+      const prev = scenes[scenes.length - 1];
+      scenes[scenes.length - 1] = makeScene(
+        words,
+        prev.index,
+        prev.startWord,
+        last,
+        maxSeconds,
+        prev,
+      );
+    } else {
+      scenes.push(makeScene(words, 0, 0, last, maxSeconds, {}));
     }
   }
 
@@ -141,10 +101,10 @@ export type Coverage = {
   padding: number;
 };
 
-/** Clip timeline (sum of assigned durations) vs. the spoken timeline. */
+/** Clip timeline (sum of integer clip lengths) vs. the spoken timeline. */
 export function sceneCoverage(scenes: Scene[]): Coverage {
   if (scenes.length === 0) return { totalClip: 0, totalSpoken: 0, padding: 0 };
-  const totalClip = scenes.reduce((sum, sc) => sum + sc.assignedDuration, 0);
+  const totalClip = scenes.reduce((s, sc) => s + sc.assignedDuration, 0);
   const totalSpoken = scenes[scenes.length - 1].tSpokenEnd;
   return { totalClip, totalSpoken, padding: totalClip - totalSpoken };
 }

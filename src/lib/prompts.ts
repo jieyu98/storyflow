@@ -67,7 +67,16 @@ export const STORY_TOOL = {
   },
 } as const;
 
-export const SCENE_SYSTEM = `You are a storyboard and prompt artist for short-form vertical (9:16) video. You receive a narration script already cut into timed scenes, plus a visual bible of characters and locations. For EACH scene, write two prompts.
+export const SCENE_SYSTEM = `You are a storyboard director and prompt artist for short-form vertical (9:16) video. You are given a narration that has ALREADY been voiced — a numbered list of its words, each tagged with the second it ends — plus a visual bible of characters and locations. Your job: cut the narration into visual BEATS and write prompts for each.
+
+CUTTING:
+- A beat is a contiguous run of words sharing ONE clear image / visual moment. Break where the story turns visually or emotionally — not on arbitrary grammar.
+- A beat's spoken length = (end time of its last word) − (end time of the word just before its first word; use 0 for the very first beat). Keep EVERY beat at or under the max clip length given in the user message, and avoid beats shorter than ~2s. Aim for natural beats — usually 6–9 total.
+- Beats must be contiguous and cover every word in order. Identify each beat ONLY by endWord: the index of the word it ends on. The next beat starts at the following word; the final beat must end on the very last word.
+
+For each beat also write:
+
+name — a 2–4 word beat name.
 
 imagePrompt — the STARTING FRAME (a single still image) that best represents this beat:
 - Vivid natural language (full sentences, conversational — written for image models like Nano Banana and GPT-Image, NOT comma-separated tags).
@@ -81,11 +90,12 @@ animationPrompt — how this still should MOVE over its clip:
 
 characterIds — the ids of bible characters visible in the scene.
 
-Keep continuity: consecutive scenes should read like the same world and characters. Return everything through the emit_scene_prompts tool, one entry per scene index.`;
+Keep continuity: consecutive beats should read like the same world and characters. Return everything through the emit_scenes tool, one entry per beat, in order.`;
 
 export const SCENE_TOOL = {
-  name: "emit_scene_prompts",
-  description: "Return an image prompt and animation prompt for each scene.",
+  name: "emit_scenes",
+  description:
+    "Return the ordered visual beats: where each one ends plus its prompts.",
   input_schema: {
     type: "object" as const,
     properties: {
@@ -94,11 +104,19 @@ export const SCENE_TOOL = {
         items: {
           type: "object",
           properties: {
-            index: { type: "integer" },
+            endWord: {
+              type: "integer",
+              description:
+                "Index of the last word included in this beat (from the numbered narration).",
+            },
+            name: {
+              type: "string",
+              description: "2-4 word beat name.",
+            },
             characterIds: {
               type: "array",
               items: { type: "string" },
-              description: "ids of bible characters visible in this scene",
+              description: "ids of bible characters visible in this beat",
             },
             imagePrompt: {
               type: "string",
@@ -111,7 +129,7 @@ export const SCENE_TOOL = {
                 "Motion + camera for image-to-video. Tool-agnostic. 1-3 sentences.",
             },
           },
-          required: ["index", "imagePrompt", "animationPrompt"],
+          required: ["endWord", "name", "imagePrompt", "animationPrompt"],
         },
       },
     },

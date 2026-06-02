@@ -1,7 +1,8 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { ANTHROPIC_MODEL, serverEnv } from "@/server/env";
 import { SCENE_SYSTEM, SCENE_TOOL, STORY_TOOL } from "./prompts";
-import type { Scene, VisualBible } from "./types";
+import { numberedWords, type SceneBeat } from "./scenes";
+import type { VisualBible, Word } from "./types";
 
 function client(): Anthropic {
   return new Anthropic({ apiKey: serverEnv.ANTHROPIC_API_KEY });
@@ -48,13 +49,6 @@ export async function generateStory(
   return extractToolInput(message, STORY_TOOL.name) as unknown as StoryResult;
 }
 
-export type ScenePromptResult = {
-  index: number;
-  imagePrompt: string;
-  animationPrompt: string;
-  characterIds?: string[];
-};
-
 function serializeBible(bible: VisualBible): string {
   const chars =
     bible.characters
@@ -67,15 +61,12 @@ function serializeBible(bible: VisualBible): string {
   return `Characters:\n${chars}\n\nLocations:\n${locs}`;
 }
 
-export async function generateScenePrompts(
-  scenes: Pick<Scene, "index" | "text" | "assignedDuration">[],
+export async function generateSceneBeats(
+  words: Word[],
   bible: VisualBible,
-): Promise<ScenePromptResult[]> {
-  const sceneList = scenes
-    .map((s) => `Scene ${s.index} — ${s.assignedDuration}s clip:\n${s.text}`)
-    .join("\n\n");
-
-  const userContent = `VISUAL BIBLE\n${serializeBible(bible)}\n\nSCENES (write a prompt set for each)\n\n${sceneList}`;
+  maxSeconds: number,
+): Promise<SceneBeat[]> {
+  const userContent = `Max clip length: ${maxSeconds} seconds.\n\nVISUAL BIBLE\n${serializeBible(bible)}\n\nNARRATION (numbered words; each tagged with the second it ends)\n${numberedWords(words)}`;
 
   const message = await client().messages.create({
     model: ANTHROPIC_MODEL,
@@ -89,7 +80,7 @@ export async function generateScenePrompts(
   });
 
   const input = extractToolInput(message, SCENE_TOOL.name) as unknown as {
-    scenes: ScenePromptResult[];
+    scenes: SceneBeat[];
   };
   return input.scenes ?? [];
 }
