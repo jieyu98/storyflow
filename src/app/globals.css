@@ -1,0 +1,303 @@
+@import "tailwindcss";
+
+/* ============================================================
+   StoryFlow — "campfire studio": deep ink twilight + ember glow
+   ============================================================ */
+
+@theme {
+  --color-ink-950: #070a12;
+  --color-ink-900: #0b0f1a;
+  --color-ink-850: #0f1626;
+  --color-ink-800: #141d30;
+  --color-ink-700: #1d2740;
+
+  --color-cream: #f4efe6;
+  --color-muted: #98a1b5;
+  --color-faint: #6b7488;
+
+  --color-ember-300: #ffd9a8;
+  --color-ember-400: #ffb877;
+  --color-ember-500: #ff9d57;
+  --color-ember-600: #ef7339;
+
+  --color-twilight-300: #b4c4f5;
+  --color-twilight-400: #93aaf0;
+  --color-twilight-500: #6f8ae0;
+
+  --color-mint-400: #7fe3b0;
+
+  --font-display: var(--ff-display), Georgia, "Times New Roman", serif;
+  --font-sans: var(--ff-sans), system-ui, sans-serif;
+  --font-mono: var(--ff-mono), ui-monospace, monospace;
+
+  --radius-xl2: 1.25rem;
+}
+
+:root {
+  --line: rgba(244, 239, 230, 0.09);
+  --line-strong: rgba(244, 239, 230, 0.16);
+  --ember-glow: rgba(255, 123, 58, 0.18);
+  --twilight-glow: rgba(91, 124, 201, 0.15);
+}
+
+html {
+  color-scheme: dark;
+}
+
+body {
+  background-color: var(--color-ink-950);
+  color: var(--color-cream);
+  font-family: var(--font-sans);
+  font-feature-settings: "ss01", "cv01";
+  background-image:
+    radial-gradient(
+      1200px 760px at 8% 112%,
+      var(--ember-glow),
+      transparent 60%
+    ),
+    radial-gradient(
+      980px 620px at 92% -12%,
+      var(--twilight-glow),
+      transparent 55%
+    ),
+    linear-gradient(180deg, #080b14 0%, #070a12 40%, #090b13 100%);
+  background-attachment: fixed;
+  background-repeat: no-repeat;
+}
+
+/* Fine film grain over everything */
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  opacity: 0.045;
+  mix-blend-mode: overlay;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.82' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+}
+
+::selection {
+  background: var(--color-ember-500);
+  color: #1a0f06;
+}
+
+/* Scrollbar */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(244, 239, 230, 0.16) transparent;
+}
+*::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+*::-webkit-scrollbar-thumb {
+  background: rgba(244, 239, 230, 0.14);
+  border-radius: 999px;
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}
+*::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 157, 87, 0.5);
+  background-clip: padding-box;
+}
+
+/* ----------------------------- Typography -------------------------------- */
+
+.font-display {
+  font-family: var(--font-display);
+}
+
+.headline {
+  font-family: var(--font-display);
+  font-optical-sizing: auto;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  line-height: 0.98;
+}
+
+.eyebrow {
+  font-family: var(--font-mono);
+  text-transform: uppercase;
+  letter-spacing: 0.28em;
+  font-size: 0.68rem;
+  color: var(--color-ember-400);
+}
+
+/* ----------------------------- Components -------------------------------- */
+
+@layer components {
+  .surface {
+    background:
+      linear-gradient(
+        180deg,
+        rgba(244, 239, 230, 0.045),
+        rgba(244, 239, 230, 0.015)
+      ),
+      rgba(11, 15, 26, 0.6);
+    border: 1px solid var(--line);
+    border-radius: var(--radius-xl2);
+    backdrop-filter: blur(14px);
+    box-shadow:
+      0 1px 0 rgba(244, 239, 230, 0.05) inset,
+      0 24px 60px -36px rgba(0, 0, 0, 0.9);
+  }
+
+  .surface-raised {
+    background:
+      linear-gradient(
+        180deg,
+        rgba(244, 239, 230, 0.07),
+        rgba(244, 239, 230, 0.02)
+      ),
+      rgba(15, 22, 38, 0.7);
+    border: 1px solid var(--line-strong);
+    border-radius: var(--radius-xl2);
+  }
+
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    font-weight: 600;
+    border-radius: 0.85rem;
+    padding: 0.7rem 1.15rem;
+    font-size: 0.92rem;
+    line-height: 1;
+    cursor: pointer;
+    transition:
+      transform 0.12s ease,
+      box-shadow 0.2s ease,
+      background 0.2s ease,
+      border-color 0.2s ease,
+      opacity 0.2s ease;
+    border: 1px solid transparent;
+    white-space: nowrap;
+  }
+  .btn:active {
+    transform: translateY(1px) scale(0.99);
+  }
+  .btn:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
+  }
+
+  .btn-ember {
+    color: #25150a;
+    background: linear-gradient(
+      180deg,
+      var(--color-ember-400),
+      var(--color-ember-600)
+    );
+    box-shadow:
+      0 0 0 1px rgba(255, 157, 87, 0.4),
+      0 14px 36px -16px rgba(255, 123, 58, 0.7);
+  }
+  .btn-ember:hover:not(:disabled) {
+    box-shadow:
+      0 0 0 1px rgba(255, 184, 119, 0.6),
+      0 18px 44px -16px rgba(255, 123, 58, 0.85);
+  }
+
+  .btn-ghost {
+    color: var(--color-cream);
+    background: rgba(244, 239, 230, 0.04);
+    border-color: var(--line-strong);
+  }
+  .btn-ghost:hover:not(:disabled) {
+    background: rgba(244, 239, 230, 0.09);
+    border-color: rgba(244, 239, 230, 0.28);
+  }
+
+  .chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    font-family: var(--font-mono);
+    font-size: 0.7rem;
+    letter-spacing: 0.04em;
+    padding: 0.28rem 0.6rem;
+    border-radius: 999px;
+    border: 1px solid var(--line-strong);
+    color: var(--color-muted);
+    background: rgba(244, 239, 230, 0.03);
+  }
+
+  .field {
+    width: 100%;
+    background: rgba(7, 10, 18, 0.7);
+    border: 1px solid var(--line-strong);
+    border-radius: 1rem;
+    color: var(--color-cream);
+    padding: 1rem 1.15rem;
+    font-size: 1rem;
+    line-height: 1.6;
+    transition:
+      border-color 0.2s ease,
+      box-shadow 0.2s ease;
+    resize: vertical;
+  }
+  .field::placeholder {
+    color: var(--color-faint);
+  }
+  .field:focus {
+    outline: none;
+    border-color: rgba(255, 157, 87, 0.55);
+    box-shadow: 0 0 0 4px rgba(255, 123, 58, 0.12);
+  }
+}
+
+/* ------------------------------- Effects --------------------------------- */
+
+@keyframes rise {
+  from {
+    opacity: 0;
+    transform: translateY(14px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.rise {
+  opacity: 0;
+  animation: rise 0.7s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
+
+@keyframes emberPulse {
+  0%,
+  100% {
+    opacity: 0.5;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.15);
+  }
+}
+
+.ember-dot {
+  animation: emberPulse 2.4s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .rise,
+  .ember-dot {
+    animation: none;
+    opacity: 1;
+  }
+}
+
+/* Sprocket-hole filmstrip edge for scene cards */
+.sprockets {
+  background-image: radial-gradient(
+    circle,
+    rgba(7, 10, 18, 0.9) 38%,
+    transparent 42%
+  );
+  background-size: 14px 22px;
+  background-repeat: repeat-y;
+  background-position: center;
+}
