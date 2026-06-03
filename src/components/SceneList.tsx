@@ -49,6 +49,11 @@ export default function SceneList({
         )}
       </div>
 
+      <p className="px-1 text-xs text-faint">
+        Tip: generate your first clean frame of a character, then reuse it as a
+        reference image in later shots to keep them looking the same.
+      </p>
+
       {scenes.map((s) => (
         <SceneCard
           key={`${s.startWord}:${s.endWord}`}

@@ -184,6 +184,8 @@ export default function Studio({ projectId }: { projectId: string }) {
           words,
           visualBible: project.visualBible,
           maxSeconds: maxClip,
+          title: project.title,
+          coreTurn: project.coreTurn,
         }),
       });
       const data = await res.json();

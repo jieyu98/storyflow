@@ -65,8 +65,19 @@ export async function generateSceneBeats(
   words: Word[],
   bible: VisualBible,
   maxSeconds: number,
+  story: { title?: string; coreTurn?: string } = {},
 ): Promise<SceneBeat[]> {
-  const userContent = `Max clip length: ${maxSeconds} seconds.\n\nVISUAL BIBLE\n${serializeBible(bible)}\n\nNARRATION (numbered words; each tagged with the second it ends)\n${numberedWords(words)}`;
+  const userContent = `Max clip length: ${maxSeconds} seconds.
+
+STORY
+Title: ${story.title?.trim() || "(untitled)"}
+Core turn / register: ${story.coreTurn?.trim() || "(plain retelling)"}
+
+VISUAL BIBLE
+${serializeBible(bible)}
+
+NARRATION (numbered words; each tagged with the second it ends)
+${numberedWords(words)}`;
 
   const message = await client().messages.create({
     model: ANTHROPIC_MODEL,

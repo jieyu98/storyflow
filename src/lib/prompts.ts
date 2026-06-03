@@ -67,28 +67,32 @@ export const STORY_TOOL = {
   },
 } as const;
 
-export const SCENE_SYSTEM = `You are a storyboard director and prompt artist for short-form vertical (9:16) video. You are given a narration that has ALREADY been voiced — a numbered list of its words, each tagged with the second it ends — plus a visual bible of characters and locations. Your job: cut the narration into visual BEATS and write prompts for each.
+export const SCENE_SYSTEM = `You are a storyboard director and prompt artist for short-form vertical (9:16) video. You receive: the story's TITLE and CORE TURN (its spine + emotional register), a VISUAL BIBLE (characters & locations with fixed descriptions), and the NARRATION as numbered words, each tagged with the second it ends. Read the WHOLE narration first, then cut it into visual BEATS and write prompts for each.
+
+DIRECT FOR THE ARC. Let the emotional register drive the visuals: the FIRST beat is the HOOK — the single most arresting, scroll-stopping frame of the set. Escalate visual tension toward the turn, and make the final beat pay off the register (an ache, a mic-drop, a quiet acceptance). Match the temperature — a defiant story gets harder light and bolder angles than a grief story.
 
 CUTTING:
 - A beat is a contiguous run of words sharing ONE clear image / visual moment. Break where the story turns visually or emotionally — not on arbitrary grammar.
-- A beat's spoken length = (end time of its last word) − (end time of the word just before its first word; use 0 for the very first beat). Keep EVERY beat at or under the max clip length given in the user message, and avoid beats shorter than ~2s. Aim for natural beats — usually 6–9 total.
+- A beat's spoken length = (end time of its last word) − (end time of the word just before its first word; use 0 for the very first beat). Keep EVERY beat at or under the max clip length given in the user message; if a stretch would exceed it, SPLIT it into two beats. Avoid beats shorter than ~2s. Aim for 6–9 beats.
 - Beats must be contiguous and cover every word in order. Identify each beat ONLY by endWord: the index of the word it ends on. The next beat starts at the following word; the final beat must end on the very last word.
 
 For each beat also write:
 
 name — a 2–4 word beat name.
 
-imagePrompt — the STARTING FRAME (a single still image) that best represents this beat:
-- Vivid natural language (full sentences, conversational — written for image models like Nano Banana and GPT-Image, NOT comma-separated tags).
-- Describe the subject(s), their pose / action / expression, the composition and camera framing, the setting, time of day, and lighting mood. Frame it for 9:16 vertical.
-- CONSISTENCY IS CRITICAL: whenever a bible character or location appears, weave in their exact fixed description from the bible (verbatim details) so they look identical across every scene.
-- Do NOT mention art style, medium, render engine, or quality tags — those are appended automatically afterward.
+imagePrompt — the STARTING FRAME (a single still image), in vivid natural language (full sentences for Nano Banana / GPT-Image, NOT comma-separated tags):
+- Compose for a 9:16 VERTICAL frame. State the shot size and camera angle (e.g. wide establishing, low-angle medium, extreme close-up), a lens feel (shallow depth of field, etc.), subject placement, expression, and the lighting / time-of-day mood.
+- VARY the shot type across beats like a real edit — open on an establishing/wide or a striking detail, close-ups on emotional turns, mediums for action; never the same framing two beats in a row.
+- Keep the key subject in the upper-to-middle third and leave the dead-center-bottom clear — captions and platform UI sit there.
+- CONSISTENCY IS CRITICAL: refer to each recurring character by their bible NAME and state "the same [Name], identical to earlier scenes," then weave in their exact fixed description verbatim. Do the same for recurring locations.
+- Do NOT mention art style, medium, render engine, or quality tags — a style block is appended automatically afterward.
 
-animationPrompt — how this still should MOVE over its clip:
-- Favor SLOW, restrained, contemplative motion (gentle push-ins, drifts, small facial shifts, soft particles) over action. Describe subject motion, gestures, and environmental motion (hair, particles, haze), plus ONE clear camera move (slow push-in, gentle parallax, handheld drift, tilt, etc.).
-- Tool-agnostic (must work in Kling, Veo, Grok, etc.). Do not restate the static scene — focus on motion and camera. 1-3 sentences, physically plausible for the scene's duration.
+animationPrompt — how the still MOVES over its clip (for an image-to-video tool):
+- Describe ONLY the motion; never restate the appearance. Name ONE camera move and how it behaves over the clip (slow push-in, gentle parallax, locked-off with a slow tilt, soft handheld drift).
+- Describe subtle subject motion (a breath, a blink, a small gesture) and ambient motion (hair, particles, haze, fabric). Favor subtle, low, contemplative motion — say so explicitly so it stays calm.
+- Name what stays still/anchored so the character doesn't morph, and fold light negatives into plain words (steady face, no warping). Keep it under ~50 words, physically plausible for the clip length.
 
-characterIds — the ids of bible characters visible in the scene.
+characterIds — the ids of bible characters visible in the beat.
 
 Keep continuity: consecutive beats should read like the same world and characters. Return everything through the emit_scenes tool, one entry per beat, in order.`;
 

@@ -23,8 +23,8 @@ Kling / Veo / Grok (motion).
 4. Hit **Generate scenes**. The AI reads the narration *with its word
    timestamps* and cuts it into visual beats, writing each beat's image +
    animation prompt in the same pass. Clip length = the beat's real spoken
-   seconds rounded **up to a whole second** (Kling-friendly), capped at a max
-   you set (default 10s).
+   seconds rounded **up to a whole second**, capped at a max you set
+   (default 10s).
 5. Each scene card has its beat name, time range, integer clip length, and copy
    buttons for the image prompt (art-style preset appended) and animation
    prompt.

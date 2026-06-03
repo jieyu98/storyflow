@@ -15,6 +15,8 @@ export async function POST(req: Request) {
       words?: Word[];
       visualBible?: VisualBible;
       maxSeconds?: number;
+      title?: string;
+      coreTurn?: string;
     };
     const words = Array.isArray(body.words) ? body.words : [];
     if (words.length === 0) {
@@ -32,6 +34,7 @@ export async function POST(req: Request) {
       words,
       body.visualBible ?? EMPTY_BIBLE,
       maxSeconds,
+      { title: body.title, coreTurn: body.coreTurn },
     );
     const scenes = buildScenesFromBeats(words, beats, maxSeconds);
     return NextResponse.json({ scenes });

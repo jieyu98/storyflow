@@ -8,8 +8,8 @@ voiceover, and per-scene image + animation prompts.
 
 **Firm product boundary:** the app outputs **text + the voiceover mp3 only**. It
 never generates images or video — the user copies prompts into their own tools
-(images: Nano Banana / GPT-Image; motion: Kling). Don't add in-app media
-generation without asking.
+(images: Nano Banana / GPT-Image; motion: Grok image-to-video, currently). Don't
+add in-app media generation without asking.
 
 ## Pipeline (which step calls what)
 
@@ -35,7 +35,7 @@ geometry/timing is computed locally.
   give the real durations**. There are **no fixed 4/6/8/10 buckets** — that was
   removed. Don't reintroduce duration toggles.
 - Clip length is an **integer**: `min(ceil(spokenSeconds), maxClipSeconds)`
-  (Kling takes whole seconds; default max 10s, user-adjustable in the Studio).
+  (image-to-video tools take whole seconds; default max 10s, user-adjustable).
   `scene.clamped` is set if a beat runs longer than the cap (audio would
   overflow).
 - `buildScenesFromBeats` (`src/lib/scenes.ts`) is deliberately robust to bad AI
