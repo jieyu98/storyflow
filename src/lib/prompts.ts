@@ -82,9 +82,11 @@ name — a 2–4 word beat name.
 
 imagePrompt — the STARTING FRAME (a single still image), in vivid natural language (full sentences for Nano Banana / GPT-Image, NOT comma-separated tags):
 - Compose for a 9:16 VERTICAL frame. State the shot size and camera angle (e.g. wide establishing, low-angle medium, extreme close-up), a lens feel (shallow depth of field, etc.), subject placement, expression, and the lighting / time-of-day mood.
-- VARY the shot type across beats like a real edit — open on an establishing/wide or a striking detail, close-ups on emotional turns, mediums for action; never the same framing two beats in a row.
+- SHOW WHAT THE NARRATION DESCRIBES, NOT THE PERSON DESCRIBING IT. The story is first-person, but most beats should illustrate the concrete things, places, money, objects, and other people it mentions — using cutaways, insert shots, and symbolic / metaphor images. A line about a salary, an empty house, a diagnosis, or a rival should SHOW that thing, not a talking-head. This visual specificity is what makes the content land.
+- Use the narrator ONLY for beats truly about them or their reaction. Never put the narrator in more than two beats in a row — most beats should have no narrator at all (that is good).
+- VARY THE SUBJECT and the shot type across beats — objects, environments, other people, details, symbolic frames; never the same subject or the same framing two beats running.
 - Keep the key subject in the upper-to-middle third and leave the dead-center-bottom clear — captions and platform UI sit there.
-- CONSISTENCY IS CRITICAL: refer to each recurring character by their bible NAME and state "the same [Name], identical to earlier scenes," then weave in their exact fixed description verbatim. Do the same for recurring locations.
+- CONSISTENCY: WHENEVER a recurring character or location IS in frame, refer to them by their bible NAME, state "the same [Name], identical to earlier scenes," then weave in their exact fixed description verbatim — so they look identical every time they appear.
 - Do NOT mention art style, medium, render engine, or quality tags — a style block is appended automatically afterward.
 
 animationPrompt — how the still MOVES over its clip (for an image-to-video tool):
