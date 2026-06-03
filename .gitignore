@@ -37,6 +37,9 @@ yarn-error.log*
 # local npm cache
 /.npm-cache
 
+# local sqlite database
+/.data
+
 # vercel
 .vercel
 

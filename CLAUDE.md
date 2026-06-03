@@ -58,7 +58,11 @@ geometry/timing is computed locally.
 - `src/lib/prompts.ts` — tool schemas (`STORY_TOOL`, `SCENE_TOOL`) + scene system prompt.
 - `src/lib/anthropic.ts` — `generateStory`, `generateSceneBeats` (forced tool use + prompt caching).
 - `src/lib/elevenlabs.ts` — `listVoices` (v2), `ttsWithTimestamps`.
-- `src/lib/storage.ts` — localStorage (project metadata) + IndexedDB (mp3 blob).
+- `src/lib/storage.ts` — **client** async wrapper over `/api/projects` (+ a
+  one-time `migrateLegacy` from the old browser localStorage/IndexedDB).
+- `src/server/db.ts` — **server** SQLite (better-sqlite3) at `.data/storyflow.db`:
+  `projects` (whole Project as JSON) + `audio` (mp3 BLOB).
+- `src/app/api/projects/*` — project CRUD + `[id]/audio` GET/PUT.
 - `src/server/env.ts` — lazy, typed secret access; `ANTHROPIC_MODEL`.
 
 ## Conventions
@@ -72,8 +76,12 @@ geometry/timing is computed locally.
   ink/cream/ember/twilight, fonts Fraunces/Hanken/JetBrains Mono, `.surface`,
   `.btn-ember`, `.field`, grain + glow). Reuse these classes; the look is a dark
   "campfire studio".
-- **Persistence is client-side**; there is no database. New project fields go on
-  the `Project` type and are saved via `upsertProject`.
+- **Persistence is server-side SQLite** at `.data/storyflow.db` (gitignored).
+  The client (`src/lib/storage.ts`) is async and talks to `/api/projects`; the
+  whole `Project` is stored as JSON, the mp3 as a BLOB. New project fields just
+  go on the `Project` type — no schema migration needed. better-sqlite3 is
+  marked external in `next.config.ts` (`serverExternalPackages`).
+  Inspect the DB: `sqlite3 .data/storyflow.db "SELECT json_extract(data,'$.title'), data FROM projects;"`
 
 ## Commands
 

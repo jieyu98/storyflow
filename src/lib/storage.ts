@@ -1,46 +1,42 @@
-// Client-side persistence. Project metadata lives in localStorage; the larger
-// voiceover mp3 blob lives in IndexedDB (keyed by project id) to dodge the
-// ~5 MB localStorage quota. All functions are no-ops / safe during SSR.
+// Client-side data access. Projects + voiceover now live in a server-side
+// SQLite DB (see src/server/db.ts) reached through /api/projects. This module
+// is the thin async client, plus a one-time migration of any projects left in
+// the old browser localStorage / IndexedDB.
 
 import type { Project } from "./types";
 
-const PROJECTS_KEY = "storyflow.projects.v1";
-const DB_NAME = "storyflow";
-const DB_VERSION = 1;
-const AUDIO_STORE = "audio";
-
 const hasWindow = typeof window !== "undefined";
 
-/* ----------------------------- Project metadata ---------------------------- */
-
-export function listProjects(): Project[] {
-  if (!hasWindow) return [];
+export async function listProjects(): Promise<Project[]> {
   try {
-    const raw = window.localStorage.getItem(PROJECTS_KEY);
-    if (!raw) return [];
-    const parsed = JSON.parse(raw) as Project[];
-    return parsed.sort((a, b) => b.updatedAt - a.updatedAt);
+    const res = await fetch("/api/projects");
+    if (!res.ok) return [];
+    return (await res.json()).projects ?? [];
   } catch {
     return [];
   }
 }
 
-export function getProject(id: string): Project | null {
-  return listProjects().find((p) => p.id === id) ?? null;
+export async function getProject(id: string): Promise<Project | null> {
+  try {
+    const res = await fetch(`/api/projects/${id}`);
+    if (!res.ok) return null;
+    return (await res.json()).project ?? null;
+  } catch {
+    return null;
+  }
 }
 
-export function upsertProject(project: Project): void {
-  if (!hasWindow) return;
-  const projects = listProjects().filter((p) => p.id !== project.id);
-  projects.push(project);
-  window.localStorage.setItem(PROJECTS_KEY, JSON.stringify(projects));
+export async function upsertProject(project: Project): Promise<void> {
+  await fetch(`/api/projects/${project.id}`, {
+    method: "PUT",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(project),
+  });
 }
 
-export function deleteProject(id: string): void {
-  if (!hasWindow) return;
-  const projects = listProjects().filter((p) => p.id !== id);
-  window.localStorage.setItem(PROJECTS_KEY, JSON.stringify(projects));
-  void deleteAudio(id);
+export async function deleteProject(id: string): Promise<void> {
+  await fetch(`/api/projects/${id}`, { method: "DELETE" });
 }
 
 export function newProjectId(): string {
@@ -48,74 +44,83 @@ export function newProjectId(): string {
   return `p_${Date.now()}_${Math.floor(Math.random() * 1e6)}`;
 }
 
-/* ------------------------------- Audio (IDB) ------------------------------- */
+/* --------------------------------- audio --------------------------------- */
 
-function openDb(): Promise<IDBDatabase> {
-  return new Promise((resolve, reject) => {
-    if (!hasWindow || !("indexedDB" in window)) {
-      reject(new Error("IndexedDB unavailable"));
-      return;
-    }
-    const req = window.indexedDB.open(DB_NAME, DB_VERSION);
-    req.onupgradeneeded = () => {
-      const db = req.result;
-      if (!db.objectStoreNames.contains(AUDIO_STORE)) {
-        db.createObjectStore(AUDIO_STORE);
-      }
-    };
-    req.onsuccess = () => resolve(req.result);
-    req.onerror = () => reject(req.error);
+export async function saveAudio(
+  id: string,
+  bytes: Uint8Array | ArrayBuffer | Blob,
+): Promise<void> {
+  await fetch(`/api/projects/${id}/audio`, {
+    method: "PUT",
+    headers: { "content-type": "audio/mpeg" },
+    body: bytes as unknown as BodyInit,
   });
 }
 
-export async function saveAudio(id: string, blob: Blob): Promise<void> {
-  const db = await openDb();
-  await new Promise<void>((resolve, reject) => {
-    const tx = db.transaction(AUDIO_STORE, "readwrite");
-    tx.objectStore(AUDIO_STORE).put(blob, id);
-    tx.oncomplete = () => resolve();
-    tx.onerror = () => reject(tx.error);
-  });
-  db.close();
+/** URL the <audio> element / download link points at; bump `version` to bust cache. */
+export function audioUrl(id: string, version?: number): string {
+  return `/api/projects/${id}/audio${version ? `?v=${version}` : ""}`;
 }
 
-export async function getAudio(id: string): Promise<Blob | null> {
-  let db: IDBDatabase;
-  try {
-    db = await openDb();
-  } catch {
-    return null;
-  }
-  const result = await new Promise<Blob | null>((resolve, reject) => {
-    const tx = db.transaction(AUDIO_STORE, "readonly");
-    const req = tx.objectStore(AUDIO_STORE).get(id);
-    req.onsuccess = () => resolve((req.result as Blob) ?? null);
-    req.onerror = () => reject(req.error);
-  });
-  db.close();
-  return result;
-}
-
-export async function deleteAudio(id: string): Promise<void> {
-  let db: IDBDatabase;
-  try {
-    db = await openDb();
-  } catch {
-    return;
-  }
-  await new Promise<void>((resolve, reject) => {
-    const tx = db.transaction(AUDIO_STORE, "readwrite");
-    tx.objectStore(AUDIO_STORE).delete(id);
-    tx.oncomplete = () => resolve();
-    tx.onerror = () => reject(tx.error);
-  });
-  db.close();
-}
-
-/** Decode a base64 mp3 (from /api/tts) into a Blob for IndexedDB + playback. */
-export function base64ToMp3Blob(base64: string): Blob {
+export function base64ToBytes(base64: string): Uint8Array {
   const binary = atob(base64);
   const bytes = new Uint8Array(binary.length);
   for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
-  return new Blob([bytes], { type: "audio/mpeg" });
+  return bytes;
+}
+
+/* ----------------------- one-time legacy migration ----------------------- */
+
+const LEGACY_KEY = "storyflow.projects.v1";
+
+/** Move any projects still in browser localStorage/IndexedDB into SQLite. */
+export async function migrateLegacy(): Promise<number> {
+  if (!hasWindow) return 0;
+  const raw = window.localStorage.getItem(LEGACY_KEY);
+  if (!raw) return 0;
+  let moved = 0;
+  try {
+    const projects = JSON.parse(raw) as Project[];
+    for (const p of projects) {
+      await upsertProject(p);
+      const blob = await legacyAudio(p.id);
+      if (blob) await saveAudio(p.id, blob);
+      moved++;
+    }
+  } catch {
+    // leave the key in place if anything failed mid-way
+    return moved;
+  }
+  window.localStorage.removeItem(LEGACY_KEY);
+  return moved;
+}
+
+/** Read one mp3 from the old IndexedDB store ("storyflow" → "audio"). */
+function legacyAudio(id: string): Promise<Blob | null> {
+  return new Promise((resolve) => {
+    if (!("indexedDB" in window)) return resolve(null);
+    const req = window.indexedDB.open("storyflow", 1);
+    req.onerror = () => resolve(null);
+    req.onsuccess = () => {
+      const dbi = req.result;
+      if (!dbi.objectStoreNames.contains("audio")) {
+        dbi.close();
+        return resolve(null);
+      }
+      const tx = dbi.transaction("audio", "readonly");
+      const get = tx.objectStore("audio").get(id);
+      get.onsuccess = () => {
+        resolve((get.result as Blob) ?? null);
+        dbi.close();
+      };
+      get.onerror = () => {
+        resolve(null);
+        dbi.close();
+      };
+    };
+    // If the old DB never existed, onupgradeneeded creates an empty one — fine.
+    req.onupgradeneeded = () => {
+      /* no-op */
+    };
+  });
 }

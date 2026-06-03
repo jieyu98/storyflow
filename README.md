@@ -29,8 +29,11 @@ Kling / Veo / Grok (motion).
    buttons for the image prompt (art-style preset appended) and animation
    prompt.
 
-Projects are saved locally in your browser (metadata in `localStorage`, the mp3
-in IndexedDB). Nothing is uploaded to a server besides the API calls.
+Projects are saved in a local **SQLite** database (`.data/storyflow.db`, created
+on first run) via the app's own API — the whole project as JSON, the mp3 as a
+BLOB. Projects left over from the old browser-storage version migrate into
+SQLite automatically the first time you open the app. Inspect it directly with
+e.g. `sqlite3 .data/storyflow.db "SELECT json_extract(data,'\$.scenes') FROM projects;"`.
 
 ## Setup
 
@@ -61,7 +64,9 @@ Key modules:
 - `src/lib/scriptStyles.ts` — writing-style presets (the system prompt Claude
   adopts) + shared safety guardrails.
 - `src/lib/styles.ts` — art-style presets, appended to every image prompt.
-- `src/app/api/*` — `story`, `voices`, `tts`, `scenes` route handlers.
+- `src/server/db.ts` — SQLite persistence (better-sqlite3).
+- `src/app/api/*` — `story`, `voices`, `tts`, `scenes`, and `projects` (CRUD +
+  audio) route handlers.
 
 ## Customizing
 

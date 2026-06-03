@@ -10,6 +10,7 @@ import { DEFAULT_SCRIPT_STYLE_ID, SCRIPT_STYLES } from "@/lib/scriptStyles";
 import {
   deleteProject,
   listProjects,
+  migrateLegacy,
   newProjectId,
   upsertProject,
 } from "@/lib/storage";
@@ -35,7 +36,7 @@ export default function HomePage() {
   );
 
   useEffect(() => {
-    setProjects(listProjects());
+    migrateLegacy().then(() => listProjects().then(setProjects));
   }, []);
 
   async function handleGenerate() {
@@ -65,7 +66,7 @@ export default function HomePage() {
         maxClipSeconds: DEFAULT_MAX_CLIP_SECONDS,
         scenes: [],
       };
-      upsertProject(project);
+      await upsertProject(project);
       router.push(`/studio/${project.id}`);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Something went wrong.");
@@ -73,9 +74,9 @@ export default function HomePage() {
     }
   }
 
-  function handleDelete(id: string) {
-    deleteProject(id);
-    setProjects(listProjects());
+  async function handleDelete(id: string) {
+    await deleteProject(id);
+    setProjects(await listProjects());
   }
 
   const words = countWords(text);

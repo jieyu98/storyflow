@@ -5,8 +5,8 @@ import Link from "next/link";
 import { wordsFromAlignment, audioDurationFromWords } from "@/lib/alignment";
 import { sceneCoverage } from "@/lib/scenes";
 import {
-  base64ToMp3Blob,
-  getAudio,
+  audioUrl,
+  base64ToBytes,
   getProject,
   saveAudio,
   upsertProject,
@@ -36,8 +36,7 @@ export default function Studio({ projectId }: { projectId: string }) {
   const [model, setModel] = useState<TtsModelId>("eleven_multilingual_v2");
   const [maxClip, setMaxClip] = useState(DEFAULT_MAX_CLIP_SECONDS);
   const [scenes, setScenes] = useState<Scene[]>([]);
-  const [audioUrl, setAudioUrl] = useState<string | null>(null);
-  const audioUrlRef = useRef<string | null>(null);
+  const [audioSrc, setAudioSrc] = useState<string | null>(null);
 
   const [regenerating, setRegenerating] = useState(false);
   const [voicing, setVoicing] = useState(false);
@@ -46,43 +45,35 @@ export default function Studio({ projectId }: { projectId: string }) {
 
   /* ------------------------------ load project ----------------------------- */
   useEffect(() => {
-    const p = getProject(projectId);
-    if (!p) {
-      setProject(null);
-      return;
-    }
-    projectRef.current = p;
-    setProject(p);
-    setTitle(p.title);
-    setScript(p.script);
-    setVoiceId(p.voiceId);
-    setVoiceName(p.voiceName);
-    setModel((p.modelId as TtsModelId) ?? "eleven_multilingual_v2");
-    setMaxClip(p.maxClipSeconds ?? DEFAULT_MAX_CLIP_SECONDS);
-    setScenes(p.scenes ?? []);
-    if (p.hasAudio) {
-      void getAudio(projectId).then((blob) => {
-        if (blob) setAudioUrlSafe(URL.createObjectURL(blob));
-      });
-    }
+    let cancelled = false;
+    void getProject(projectId).then((p) => {
+      if (cancelled) return;
+      if (!p) {
+        setProject(null);
+        return;
+      }
+      projectRef.current = p;
+      setProject(p);
+      setTitle(p.title);
+      setScript(p.script);
+      setVoiceId(p.voiceId);
+      setVoiceName(p.voiceName);
+      setModel((p.modelId as TtsModelId) ?? "eleven_multilingual_v2");
+      setMaxClip(p.maxClipSeconds ?? DEFAULT_MAX_CLIP_SECONDS);
+      setScenes(p.scenes ?? []);
+      if (p.hasAudio) setAudioSrc(audioUrl(projectId, p.updatedAt));
+    });
     return () => {
-      if (audioUrlRef.current) URL.revokeObjectURL(audioUrlRef.current);
+      cancelled = true;
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [projectId]);
-
-  function setAudioUrlSafe(url: string | null) {
-    if (audioUrlRef.current) URL.revokeObjectURL(audioUrlRef.current);
-    audioUrlRef.current = url;
-    setAudioUrl(url);
-  }
 
   function save(mutate: (p: Project) => Project) {
     const cur = projectRef.current;
     if (!cur) return;
     const next = { ...mutate(cur), updatedAt: Date.now() };
     projectRef.current = next;
-    upsertProject(next);
+    void upsertProject(next); // fire-and-forget persist
     setProject(next);
   }
 
@@ -155,13 +146,13 @@ export default function Studio({ projectId }: { projectId: string }) {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? "Voiceover failed.");
 
-      const blob = base64ToMp3Blob(data.audioBase64);
-      await saveAudio(projectId, blob);
-      setAudioUrlSafe(URL.createObjectURL(blob));
+      const bytes = base64ToBytes(data.audioBase64);
+      await saveAudio(projectId, bytes);
 
       const w = wordsFromAlignment(data.alignment);
       const duration = audioDurationFromWords(w);
       setScenes([]); // timings changed → previous cut is stale
+      setAudioSrc(audioUrl(projectId, Date.now()));
       save((p) => ({
         ...p,
         script,
@@ -308,15 +299,15 @@ export default function Studio({ projectId }: { projectId: string }) {
               )}
             </button>
 
-            {audioUrl && (
+            {audioSrc && (
               <VoiceoverPlayer
-                src={audioUrl}
+                src={audioSrc}
                 duration={project.audioDuration}
                 scenes={scenes}
                 title={project.title}
               />
             )}
-            {scriptDirty && audioUrl && (
+            {scriptDirty && audioSrc && (
               <p className="text-xs text-ember-300/90">
                 Script changed since this voiceover — regenerate to re-sync
                 timestamps.
