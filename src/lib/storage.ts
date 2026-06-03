@@ -104,6 +104,10 @@ export async function deleteClip(
   });
 }
 
+export async function deleteAllClips(projectId: string): Promise<void> {
+  await fetch(`/api/projects/${projectId}/clips`, { method: "DELETE" });
+}
+
 export function clipUrl(
   projectId: string,
   sceneIndex: number,

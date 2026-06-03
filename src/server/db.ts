@@ -138,6 +138,10 @@ export function deleteClip(projectId: string, sceneIndex: number): void {
     .run(projectId, sceneIndex);
 }
 
+export function deleteAllClips(projectId: string): void {
+  db().prepare("DELETE FROM clips WHERE project_id = ?").run(projectId);
+}
+
 export function listClipIndexes(
   projectId: string,
 ): { index: number; mime: string }[] {

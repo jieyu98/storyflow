@@ -7,6 +7,7 @@ import { sceneCoverage } from "@/lib/scenes";
 import {
   audioUrl,
   base64ToBytes,
+  deleteAllClips,
   getProject,
   listClips,
   saveAudio,
@@ -200,6 +201,10 @@ export default function Studio({ projectId }: { projectId: string }) {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? "Could not cut scenes.");
       const next: Scene[] = data.scenes ?? [];
+      // Re-cut beats no longer line up with old clips — drop them all.
+      await deleteAllClips(projectId);
+      setClips(new Set());
+      setClipVersion((v) => v + 1);
       setScenes(next);
       save((p) => ({ ...p, maxClipSeconds: maxClip, scenes: next }));
     } catch (e) {
