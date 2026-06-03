@@ -16,6 +16,7 @@ export default function SceneList({
   clips,
   clipVersion,
   onClipChange,
+  onPreview,
 }: {
   scenes: Scene[];
   styleId: string;
@@ -25,6 +26,7 @@ export default function SceneList({
   clips: Set<number>;
   clipVersion: number;
   onClipChange: (index: number, hasClip: boolean) => void;
+  onPreview: (scene: Scene) => void;
 }) {
   if (scenes.length === 0) return null;
 
@@ -72,6 +74,7 @@ export default function SceneList({
           hasClip={clips.has(s.index)}
           clipVersion={clipVersion}
           onClipChange={onClipChange}
+          onPreview={onPreview}
         />
       ))}
     </div>

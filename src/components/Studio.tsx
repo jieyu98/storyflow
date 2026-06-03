@@ -41,6 +41,8 @@ export default function Studio({ projectId }: { projectId: string }) {
   const [audioSrc, setAudioSrc] = useState<string | null>(null);
   const [clips, setClips] = useState<Set<number>>(new Set());
   const [clipVersion, setClipVersion] = useState(0);
+  const [seekReq, setSeekReq] = useState<{ t: number; n: number } | null>(null);
+  const previewRef = useRef<HTMLElement>(null);
 
   const [regenerating, setRegenerating] = useState(false);
   const [voicing, setVoicing] = useState(false);
@@ -215,6 +217,11 @@ export default function Studio({ projectId }: { projectId: string }) {
       return next;
     });
     setClipVersion((v) => v + 1);
+  }
+
+  function handlePreviewScene(scene: Scene) {
+    setSeekReq({ t: scene.tStart, n: Date.now() });
+    previewRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
   }
 
   /* --------------------------------- render -------------------------------- */
@@ -399,7 +406,7 @@ export default function Studio({ projectId }: { projectId: string }) {
         </div>
 
         {scenes.length > 0 && audioSrc && (
-          <section className="surface p-5">
+          <section ref={previewRef} className="surface p-5">
             <p className="eyebrow mb-3 flex items-center gap-2">
               <FilmIcon width={14} height={14} /> Preview
             </p>
@@ -410,6 +417,7 @@ export default function Studio({ projectId }: { projectId: string }) {
               clips={clips}
               clipVersion={clipVersion}
               duration={project.audioDuration}
+              seekReq={seekReq}
             />
             <p className="mx-auto mt-3 max-w-sm text-center text-xs text-faint">
               Drop a clip onto each scene below — they play in order under your
@@ -428,6 +436,7 @@ export default function Studio({ projectId }: { projectId: string }) {
             clips={clips}
             clipVersion={clipVersion}
             onClipChange={handleClipChange}
+            onPreview={handlePreviewScene}
           />
         )}
       </div>

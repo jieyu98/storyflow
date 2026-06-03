@@ -1,24 +1,19 @@
 import { NextResponse } from "next/server";
 import { getAudio, saveAudio } from "@/server/db";
 import { apiError } from "@/lib/http";
+import { rangeResponse } from "@/lib/range";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 type Ctx = { params: Promise<{ id: string }> };
 
-export async function GET(_req: Request, { params }: Ctx) {
+export async function GET(req: Request, { params }: Ctx) {
   try {
     const { id } = await params;
     const mp3 = getAudio(id);
     if (!mp3) return new NextResponse("Not found", { status: 404 });
-    return new NextResponse(new Uint8Array(mp3), {
-      headers: {
-        "content-type": "audio/mpeg",
-        "content-length": String(mp3.length),
-        "cache-control": "no-store",
-      },
-    });
+    return rangeResponse(req, mp3, "audio/mpeg");
   } catch (err) {
     return apiError(err);
   }

@@ -1,24 +1,19 @@
 import { NextResponse } from "next/server";
 import { deleteClip, getClip, saveClip } from "@/server/db";
 import { apiError } from "@/lib/http";
+import { rangeResponse } from "@/lib/range";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 type Ctx = { params: Promise<{ id: string; index: string }> };
 
-export async function GET(_req: Request, { params }: Ctx) {
+export async function GET(req: Request, { params }: Ctx) {
   try {
     const { id, index } = await params;
     const clip = getClip(id, Number(index));
     if (!clip) return new NextResponse("Not found", { status: 404 });
-    return new NextResponse(new Uint8Array(clip.video), {
-      headers: {
-        "content-type": clip.mime || "video/mp4",
-        "content-length": String(clip.video.length),
-        "cache-control": "no-store",
-      },
-    });
+    return rangeResponse(req, clip.video, clip.mime || "video/mp4");
   } catch (err) {
     return apiError(err);
   }

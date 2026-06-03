@@ -6,7 +6,7 @@ import { composeImagePrompt } from "@/lib/styles";
 import { formatClock } from "@/lib/text";
 import CopyButton from "./CopyButton";
 import ClipDrop from "./ClipDrop";
-import { ImageIcon, MotionIcon } from "./icons";
+import { ImageIcon, MotionIcon, PlayIcon } from "./icons";
 
 export default function SceneCard({
   scene,
@@ -16,6 +16,7 @@ export default function SceneCard({
   hasClip,
   clipVersion,
   onClipChange,
+  onPreview,
 }: {
   scene: Scene;
   styleId: string;
@@ -24,6 +25,7 @@ export default function SceneCard({
   hasClip: boolean;
   clipVersion: number;
   onClipChange: (index: number, hasClip: boolean) => void;
+  onPreview: (scene: Scene) => void;
 }) {
   const nameById = (id: string) =>
     characters.find((c) => c.id === id)?.name ?? id;
@@ -57,6 +59,14 @@ export default function SceneCard({
               {nameById(id)}
             </span>
           ))}
+          <button
+            type="button"
+            onClick={() => onPreview(scene)}
+            className="btn btn-ghost ml-auto !px-2.5 !py-1 !text-[0.65rem]"
+            title="Play this scene in the preview"
+          >
+            <PlayIcon width={11} height={11} /> Preview
+          </button>
         </div>
 
         {scene.name && (

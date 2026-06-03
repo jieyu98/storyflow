@@ -13,6 +13,7 @@ export default function PreviewPlayer({
   clips,
   clipVersion,
   duration,
+  seekReq,
 }: {
   audioSrc: string;
   scenes: Scene[];
@@ -20,6 +21,7 @@ export default function PreviewPlayer({
   clips: Set<number>;
   clipVersion: number;
   duration?: number;
+  seekReq?: { t: number; n: number } | null;
 }) {
   const audioRef = useRef<HTMLAudioElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -74,6 +76,19 @@ export default function PreviewPlayer({
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [idx, clipVersion]);
+
+  // External "jump to this scene" requests (the ▶ Preview button on a card).
+  useEffect(() => {
+    if (!seekReq) return;
+    const a = audioRef.current;
+    if (!a) return;
+    const t = Math.max(0, Math.min(seekReq.t, dur || seekReq.t));
+    a.currentTime = t;
+    setTime(t);
+    setIdx(sceneAt(t));
+    void a.play();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [seekReq]);
 
   function toggle() {
     const a = audioRef.current;
