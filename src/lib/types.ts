@@ -1,7 +1,8 @@
 // Shared domain types for StoryFlow.
 
-/** Default cap on a single clip's length (seconds); one still drifts past this. */
-export const DEFAULT_MAX_CLIP_SECONDS = 10;
+/** Default cap on a single clip's length (seconds). ~6s fits Grok's clip length
+ *  and keeps a livelier cut rhythm; a single still also drifts past this. */
+export const DEFAULT_MAX_CLIP_SECONDS = 6;
 
 /** A single spoken word with its time span (seconds) on the voiceover timeline. */
 export type Word = {

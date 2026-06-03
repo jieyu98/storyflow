@@ -73,7 +73,7 @@ DIRECT FOR THE ARC. Let the emotional register drive the visuals: the FIRST beat
 
 CUTTING:
 - A beat is a contiguous run of words sharing ONE clear image / visual moment. Break where the story turns visually or emotionally — not on arbitrary grammar.
-- A beat's spoken length = (end time of its last word) − (end time of the word just before its first word; use 0 for the very first beat). Keep EVERY beat at or under the max clip length given in the user message; if a stretch would exceed it, SPLIT it into two beats. Avoid beats shorter than ~2s. Aim for 6–9 beats.
+- A beat's spoken length = (end time of its last word) − (end time of the word just before its first word; use 0 for the very first beat). Keep EVERY beat at or under the max clip length given in the user message; if a stretch would exceed it, SPLIT it into two beats. Aim for beats of about 4–6 seconds each (a 60–90s story is typically 12–18 beats) — favor more, shorter shots over long holds. Avoid beats shorter than ~2s.
 - Beats must be contiguous and cover every word in order. Identify each beat ONLY by endWord: the index of the word it ends on. The next beat starts at the following word; the final beat must end on the very last word.
 
 For each beat also write:
