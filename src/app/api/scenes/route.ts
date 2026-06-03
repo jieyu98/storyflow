@@ -36,6 +36,12 @@ export async function POST(req: Request) {
       maxSeconds,
       { title: body.title, coreTurn: body.coreTurn },
     );
+    if (beats.length === 0) {
+      return NextResponse.json(
+        { error: "The model returned no scenes. Try regenerating." },
+        { status: 502 },
+      );
+    }
     const scenes = buildScenesFromBeats(words, beats, maxSeconds);
     return NextResponse.json({ scenes });
   } catch (err) {

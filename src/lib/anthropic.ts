@@ -81,7 +81,9 @@ ${numberedWords(words)}`;
 
   const message = await client().messages.create({
     model: ANTHROPIC_MODEL,
-    max_tokens: 4096,
+    // Many short beats × two prompts each — needs plenty of headroom or the
+    // tool JSON truncates (stop_reason: max_tokens) and parses to nothing.
+    max_tokens: 16000,
     system: [
       { type: "text", text: SCENE_SYSTEM, cache_control: { type: "ephemeral" } },
     ],
@@ -90,8 +92,14 @@ ${numberedWords(words)}`;
     messages: [{ role: "user", content: userContent }],
   });
 
+  if (message.stop_reason === "max_tokens") {
+    throw new Error(
+      "The scene plan was too long and got cut off. Try a shorter script or a larger max clip length (fewer beats).",
+    );
+  }
+
   const input = extractToolInput(message, SCENE_TOOL.name) as unknown as {
-    scenes: SceneBeat[];
+    scenes?: SceneBeat[];
   };
   return input.scenes ?? [];
 }
