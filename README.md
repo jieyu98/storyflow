@@ -28,6 +28,9 @@ Kling / Veo / Grok (motion).
 5. Each scene card has its beat name, time range, integer clip length, and copy
    buttons for the image prompt (art-style preset appended) and animation
    prompt.
+6. Generate each clip in your own image-to-video tool, then **drag it onto its
+   scene** and hit **Preview** — the clips play in order under the voiceover
+   (scenes without a clip show a placeholder).
 
 Projects are saved in a local **SQLite** database (`.data/storyflow.db`, created
 on first run) via the app's own API — the whole project as JSON, the mp3 as a

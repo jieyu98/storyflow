@@ -29,6 +29,14 @@ function db(): Database.Database {
       mp3        BLOB NOT NULL,
       updated_at INTEGER
     );
+    CREATE TABLE IF NOT EXISTS clips (
+      project_id  TEXT,
+      scene_index INTEGER,
+      mime        TEXT,
+      video       BLOB NOT NULL,
+      updated_at  INTEGER,
+      PRIMARY KEY (project_id, scene_index)
+    );
   `);
   globalForDb.__storyflowDb = conn;
   return conn;
@@ -70,6 +78,7 @@ export function deleteProject(id: string): void {
   const conn = db();
   conn.prepare("DELETE FROM projects WHERE id = ?").run(id);
   conn.prepare("DELETE FROM audio WHERE project_id = ?").run(id);
+  conn.prepare("DELETE FROM clips WHERE project_id = ?").run(id);
 }
 
 export function saveAudio(id: string, mp3: Buffer): void {
@@ -89,4 +98,53 @@ export function getAudio(id: string): Buffer | null {
     .prepare("SELECT mp3 FROM audio WHERE project_id = ?")
     .get(id) as { mp3: Buffer } | undefined;
   return row ? row.mp3 : null;
+}
+
+/* -------------------------------- clips ---------------------------------- */
+
+export function saveClip(
+  projectId: string,
+  sceneIndex: number,
+  mime: string,
+  video: Buffer,
+): void {
+  db()
+    .prepare(
+      `INSERT INTO clips (project_id, scene_index, mime, video, updated_at)
+       VALUES (?, ?, ?, ?, ?)
+       ON CONFLICT(project_id, scene_index) DO UPDATE SET
+         mime = excluded.mime,
+         video = excluded.video,
+         updated_at = excluded.updated_at`,
+    )
+    .run(projectId, sceneIndex, mime, video, Date.now());
+}
+
+export function getClip(
+  projectId: string,
+  sceneIndex: number,
+): { mime: string; video: Buffer } | null {
+  const row = db()
+    .prepare(
+      "SELECT mime, video FROM clips WHERE project_id = ? AND scene_index = ?",
+    )
+    .get(projectId, sceneIndex) as { mime: string; video: Buffer } | undefined;
+  return row ?? null;
+}
+
+export function deleteClip(projectId: string, sceneIndex: number): void {
+  db()
+    .prepare("DELETE FROM clips WHERE project_id = ? AND scene_index = ?")
+    .run(projectId, sceneIndex);
+}
+
+export function listClipIndexes(
+  projectId: string,
+): { index: number; mime: string }[] {
+  const rows = db()
+    .prepare(
+      "SELECT scene_index, mime FROM clips WHERE project_id = ? ORDER BY scene_index",
+    )
+    .all(projectId) as { scene_index: number; mime: string }[];
+  return rows.map((r) => ({ index: r.scene_index, mime: r.mime }));
 }

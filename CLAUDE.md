@@ -61,8 +61,11 @@ geometry/timing is computed locally.
 - `src/lib/storage.ts` — **client** async wrapper over `/api/projects` (+ a
   one-time `migrateLegacy` from the old browser localStorage/IndexedDB).
 - `src/server/db.ts` — **server** SQLite (better-sqlite3) at `.data/storyflow.db`:
-  `projects` (whole Project as JSON) + `audio` (mp3 BLOB).
-- `src/app/api/projects/*` — project CRUD + `[id]/audio` GET/PUT.
+  `projects` (Project JSON) + `audio` (mp3 BLOB) + `clips` (per-scene video BLOB).
+- `src/app/api/projects/*` — project CRUD, `[id]/audio` GET/PUT, and
+  `[id]/clips` (list) + `[id]/clips/[index]` GET/PUT/DELETE.
+- `src/components/{ClipDrop,PreviewPlayer}.tsx` — per-scene clip upload and the
+  9:16 preview that sequences uploaded clips under the voiceover by scene timing.
 - `src/server/env.ts` — lazy, typed secret access; `ANTHROPIC_MODEL`.
 
 ## Conventions

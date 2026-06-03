@@ -8,6 +8,7 @@ import {
   audioUrl,
   base64ToBytes,
   getProject,
+  listClips,
   saveAudio,
   upsertProject,
 } from "@/lib/storage";
@@ -23,6 +24,7 @@ import VisualBibleView from "./VisualBibleView";
 import VoicePicker from "./VoicePicker";
 import VoiceoverPlayer from "./VoiceoverPlayer";
 import SceneList from "./SceneList";
+import PreviewPlayer from "./PreviewPlayer";
 import { ArrowIcon, FilmIcon, MicIcon, SparkIcon, Spinner } from "./icons";
 
 export default function Studio({ projectId }: { projectId: string }) {
@@ -37,6 +39,8 @@ export default function Studio({ projectId }: { projectId: string }) {
   const [maxClip, setMaxClip] = useState(DEFAULT_MAX_CLIP_SECONDS);
   const [scenes, setScenes] = useState<Scene[]>([]);
   const [audioSrc, setAudioSrc] = useState<string | null>(null);
+  const [clips, setClips] = useState<Set<number>>(new Set());
+  const [clipVersion, setClipVersion] = useState(0);
 
   const [regenerating, setRegenerating] = useState(false);
   const [voicing, setVoicing] = useState(false);
@@ -62,6 +66,9 @@ export default function Studio({ projectId }: { projectId: string }) {
       setMaxClip(p.maxClipSeconds ?? DEFAULT_MAX_CLIP_SECONDS);
       setScenes(p.scenes ?? []);
       if (p.hasAudio) setAudioSrc(audioUrl(projectId, p.updatedAt));
+      void listClips(projectId).then((list) => {
+        if (!cancelled) setClips(new Set(list.map((c) => c.index)));
+      });
     });
     return () => {
       cancelled = true;
@@ -198,6 +205,16 @@ export default function Studio({ projectId }: { projectId: string }) {
     } finally {
       setCutting(false);
     }
+  }
+
+  function handleClipChange(index: number, has: boolean) {
+    setClips((prev) => {
+      const next = new Set(prev);
+      if (has) next.add(index);
+      else next.delete(index);
+      return next;
+    });
+    setClipVersion((v) => v + 1);
   }
 
   /* --------------------------------- render -------------------------------- */
@@ -381,12 +398,36 @@ export default function Studio({ projectId }: { projectId: string }) {
           </section>
         </div>
 
+        {scenes.length > 0 && audioSrc && (
+          <section className="surface p-5">
+            <p className="eyebrow mb-3 flex items-center gap-2">
+              <FilmIcon width={14} height={14} /> Preview
+            </p>
+            <PreviewPlayer
+              audioSrc={audioSrc}
+              scenes={scenes}
+              projectId={projectId}
+              clips={clips}
+              clipVersion={clipVersion}
+              duration={project.audioDuration}
+            />
+            <p className="mx-auto mt-3 max-w-sm text-center text-xs text-faint">
+              Drop a clip onto each scene below — they play in order under your
+              voiceover. Empty scenes show a placeholder.
+            </p>
+          </section>
+        )}
+
         {scenes.length > 0 && (
           <SceneList
             scenes={scenes}
             styleId={project.stylePresetId}
             characters={project.visualBible.characters}
             coverage={coverage}
+            projectId={projectId}
+            clips={clips}
+            clipVersion={clipVersion}
+            onClipChange={handleClipChange}
           />
         )}
       </div>

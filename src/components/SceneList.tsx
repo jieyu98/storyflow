@@ -12,11 +12,19 @@ export default function SceneList({
   styleId,
   characters,
   coverage,
+  projectId,
+  clips,
+  clipVersion,
+  onClipChange,
 }: {
   scenes: Scene[];
   styleId: string;
   characters: BibleCharacter[];
   coverage: Coverage;
+  projectId: string;
+  clips: Set<number>;
+  clipVersion: number;
+  onClipChange: (index: number, hasClip: boolean) => void;
 }) {
   if (scenes.length === 0) return null;
 
@@ -60,6 +68,10 @@ export default function SceneList({
           scene={s}
           styleId={styleId}
           characters={characters}
+          projectId={projectId}
+          hasClip={clips.has(s.index)}
+          clipVersion={clipVersion}
+          onClipChange={onClipChange}
         />
       ))}
     </div>

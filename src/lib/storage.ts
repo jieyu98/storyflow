@@ -69,6 +69,49 @@ export function base64ToBytes(base64: string): Uint8Array {
   return bytes;
 }
 
+/* ----------------------------- scene clips ------------------------------- */
+
+export type ClipInfo = { index: number; mime: string };
+
+export async function listClips(projectId: string): Promise<ClipInfo[]> {
+  try {
+    const res = await fetch(`/api/projects/${projectId}/clips`);
+    if (!res.ok) return [];
+    return (await res.json()).clips ?? [];
+  } catch {
+    return [];
+  }
+}
+
+export async function saveClip(
+  projectId: string,
+  sceneIndex: number,
+  file: File,
+): Promise<void> {
+  await fetch(`/api/projects/${projectId}/clips/${sceneIndex}`, {
+    method: "PUT",
+    headers: { "content-type": file.type || "video/mp4" },
+    body: file,
+  });
+}
+
+export async function deleteClip(
+  projectId: string,
+  sceneIndex: number,
+): Promise<void> {
+  await fetch(`/api/projects/${projectId}/clips/${sceneIndex}`, {
+    method: "DELETE",
+  });
+}
+
+export function clipUrl(
+  projectId: string,
+  sceneIndex: number,
+  version?: number,
+): string {
+  return `/api/projects/${projectId}/clips/${sceneIndex}${version ? `?v=${version}` : ""}`;
+}
+
 /* ----------------------- one-time legacy migration ----------------------- */
 
 const LEGACY_KEY = "storyflow.projects.v1";

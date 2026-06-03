@@ -5,16 +5,25 @@ import type { BibleCharacter, Scene } from "@/lib/types";
 import { composeImagePrompt } from "@/lib/styles";
 import { formatClock } from "@/lib/text";
 import CopyButton from "./CopyButton";
+import ClipDrop from "./ClipDrop";
 import { ImageIcon, MotionIcon } from "./icons";
 
 export default function SceneCard({
   scene,
   styleId,
   characters,
+  projectId,
+  hasClip,
+  clipVersion,
+  onClipChange,
 }: {
   scene: Scene;
   styleId: string;
   characters: BibleCharacter[];
+  projectId: string;
+  hasClip: boolean;
+  clipVersion: number;
+  onClipChange: (index: number, hasClip: boolean) => void;
 }) {
   const nameById = (id: string) =>
     characters.find((c) => c.id === id)?.name ?? id;
@@ -80,6 +89,14 @@ export default function SceneCard({
             Prompts not written yet — hit “Write scene prompts”.
           </p>
         )}
+
+        <ClipDrop
+          projectId={projectId}
+          sceneIndex={scene.index}
+          hasClip={hasClip}
+          version={clipVersion}
+          onChange={onClipChange}
+        />
       </div>
     </article>
   );
