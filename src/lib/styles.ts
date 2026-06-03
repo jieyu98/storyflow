@@ -17,7 +17,7 @@ export const ART_STYLES: ArtStyle[] = [
     name: "Pixar Campfire",
     tagline: "Warm cinematic 3D, cozy storybook glow",
     prompt:
-      "3D rendered animation in the style of modern Pixar/Disney films, soft cinematic lighting, warm campfire glow against cool blue twilight. Stylized cartoon character with large expressive eyes, rounded soft facial features, smooth subsurface-scattering skin, rosy cheeks. Highly detailed yet simplified geometry, painterly textures on fabric and fur. Shallow depth of field with soft bokeh background, atmospheric haze, glowing particles. Rich color grading: warm oranges and ambers in foreground, deep navy and purple blues in background. Volumetric lighting, gentle rim lighting on subjects, cozy storybook mood. High polish, family-friendly, cinematic 3D render, octane/redshift quality.",
+      "Rendered in the style of modern Pixar/Disney 3D animation: soft cinematic lighting, warm campfire glow against cool blue twilight. Highly detailed yet simplified, stylized geometry with painterly textures on fabric, surfaces and materials, and soft subsurface scattering where appropriate. Any characters present are stylized with soft rounded features and expressive eyes; render only the subjects described above and add no people unless they are described. Shallow depth of field with soft bokeh background, atmospheric haze, glowing particles. Rich color grading: warm oranges and ambers in the foreground, deep navy and purple blues in the background. Volumetric lighting, gentle rim lighting, cozy storybook mood. High polish, family-friendly, cinematic 3D render, octane/redshift quality.",
   },
 ];
 
