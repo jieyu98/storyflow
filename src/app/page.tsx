@@ -6,7 +6,11 @@ import PresetCards, { type PresetOption } from "@/components/PresetCards";
 import ProjectList from "@/components/ProjectList";
 import { ArrowIcon, SparkIcon, Spinner } from "@/components/icons";
 import { ART_STYLES, DEFAULT_STYLE_ID } from "@/lib/styles";
-import { DEFAULT_SCRIPT_STYLE_ID, SCRIPT_STYLES } from "@/lib/scriptStyles";
+import {
+  DEFAULT_SCRIPT_STYLE_ID,
+  SCRIPT_STYLES,
+  getScriptStyle,
+} from "@/lib/scriptStyles";
 import {
   deleteProject,
   listProjects,
@@ -14,7 +18,7 @@ import {
   newProjectId,
   upsertProject,
 } from "@/lib/storage";
-import { DEFAULT_MAX_CLIP_SECONDS, type Project } from "@/lib/types";
+import { type Project } from "@/lib/types";
 import { countWords } from "@/lib/text";
 
 export default function HomePage() {
@@ -34,6 +38,13 @@ export default function HomePage() {
     () => ART_STYLES.map((s) => ({ id: s.id, name: s.name, sub: s.tagline })),
     [],
   );
+
+  // Picking a writing style applies its recommended art style (user can still override).
+  function handleScriptStyle(id: string) {
+    setScriptStyleId(id);
+    const rec = getScriptStyle(id).recommendedArtStyleId;
+    if (rec) setStyleId(rec);
+  }
 
   useEffect(() => {
     migrateLegacy().then(() => listProjects().then(setProjects));
@@ -63,7 +74,7 @@ export default function HomePage() {
         visualBible: data.visualBible ?? { characters: [], locations: [] },
         scriptStyleId,
         stylePresetId: styleId,
-        maxClipSeconds: DEFAULT_MAX_CLIP_SECONDS,
+        conceptStylePresetId: getScriptStyle(scriptStyleId).recommendedConceptStyleId,
         scenes: [],
       };
       await upsertProject(project);
@@ -134,7 +145,7 @@ export default function HomePage() {
           <PresetCards
             options={scriptStyleOptions}
             value={scriptStyleId}
-            onChange={setScriptStyleId}
+            onChange={handleScriptStyle}
           />
           <p className="mt-2 text-xs text-faint">
             How the narration is written. Sets a starting clip-length mix you can
