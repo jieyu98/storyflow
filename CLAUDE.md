@@ -87,8 +87,20 @@ geometry/timing is computed locally.
   `projects` (Project JSON) + `audio` (mp3 BLOB) + `clips` (per-scene video BLOB).
 - `src/app/api/projects/*` — project CRUD, `[id]/audio` GET/PUT, and
   `[id]/clips` (list) + `[id]/clips/[index]` GET/PUT/DELETE.
-- `src/components/{ClipDrop,PreviewPlayer}.tsx` — per-scene clip upload and the
-  9:16 preview that sequences uploaded clips under the voiceover by scene timing.
+- `src/components/Automate.tsx` — the **Automate stepper** shown under the script:
+  a guided, ordered walk through the pipeline. Steps are tagged `auto` (the app
+  does it: voiceover, scenes) or `you` (a guided handoff — the app shows the
+  prompts, you generate the image/clip in your own tools and drop it in). The
+  reference-images step checkboxes persist via `Project.refDoneIds`; per-scene
+  steps reuse `SceneCard` and complete when a clip is uploaded.
+- `src/components/ClipDrop.tsx` — per-scene clip upload (drag/drop → `/clips`).
+- `src/components/PreviewPlayer.tsx` + `src/remotion/PreviewComposition.tsx` — the
+  9:16 preview. It is a **Remotion `<Player>`** (a player, NOT a renderer — no
+  video export, stays within the product boundary) driving a composition that
+  sequences each scene's clip under the voiceover by real timing, overlays
+  `onScreenText`, and shows a placeholder for clip-less scenes. `PreviewPlayer`
+  runs the Player headless and keeps the campfire-styled controls + a full-width
+  per-scene timeline.
 - `src/server/env.ts` — lazy, typed secret access; `ANTHROPIC_MODEL`.
 
 ## Conventions

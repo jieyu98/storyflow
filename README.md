@@ -35,8 +35,16 @@ Kling / Veo / Grok (motion).
    vs. extend), and which **reference images** to reuse for consistency. The
    Visual bible has a copy button for each entity's canonical **reference prompt**.
 6. Generate each clip in your own image-to-video tool, then **drag it onto its
-   scene** and hit **Preview** — the clips play in order under the voiceover
-   (scenes without a clip show a placeholder).
+   scene** and hit **Preview**. The preview is a **Remotion player** that
+   sequences the clips under the voiceover by real scene timing, burns in any
+   **on-screen text**, and shows a placeholder for clip-less scenes — with a
+   full-width per-scene **timeline** below it. (It's a player, not a renderer:
+   StoryFlow still doesn't export video.)
+
+The **Automate** panel under the script ties this together as a guided stepper:
+the app-owned steps (**voiceover**, **scenes**) run in-app, and the handoff steps
+(**reference images**, then **scene 1, 2, …**) show the exact prompts and a
+checkbox / clip drop so you can work straight down the list.
 
 Projects are saved in a local **SQLite** database (`.data/storyflow.db`, created
 on first run) via the app's own API — the whole project as JSON, the mp3 as a
@@ -60,7 +68,7 @@ Required env vars (see `.env.example`):
 ## Stack
 
 Next.js 16 (App Router) · React 19 · TypeScript · Tailwind v4 · Anthropic SDK ·
-ElevenLabs REST.
+ElevenLabs REST · Remotion (`@remotion/player`, preview only).
 
 Key modules:
 
@@ -79,6 +87,9 @@ Key modules:
   copy time), `styleForScene` (live vs. concept), and `composeReferencePrompt`
   (per-entity reference image for consistency).
 - `src/server/db.ts` — SQLite persistence (better-sqlite3).
+- `src/components/Automate.tsx` — the guided pipeline stepper.
+- `src/components/PreviewPlayer.tsx` + `src/remotion/PreviewComposition.tsx` — the
+  in-browser Remotion preview (player only, no export).
 - `src/app/api/*` — `story`, `voices`, `tts`, `scenes`, and `projects` (CRUD +
   audio) route handlers.
 
