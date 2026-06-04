@@ -21,6 +21,7 @@ import VoicePicker from "./VoicePicker";
 import VoiceoverPlayer from "./VoiceoverPlayer";
 import SceneList from "./SceneList";
 import PreviewPlayer from "./PreviewPlayer";
+import Automate from "./Automate";
 import { ArrowIcon, FilmIcon, MicIcon, SparkIcon, Spinner } from "./icons";
 
 export default function Studio({ projectId }: { projectId: string }) {
@@ -216,6 +217,15 @@ export default function Studio({ projectId }: { projectId: string }) {
     previewRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
   }
 
+  function handleToggleRef(id: string, done: boolean) {
+    save((p) => {
+      const set = new Set(p.refDoneIds ?? []);
+      if (done) set.add(id);
+      else set.delete(id);
+      return { ...p, refDoneIds: Array.from(set) };
+    });
+  }
+
   /* --------------------------------- render -------------------------------- */
   if (project === undefined) {
     return (
@@ -277,6 +287,30 @@ export default function Studio({ projectId }: { projectId: string }) {
           dirty={scriptDirty}
           coreTurn={project.coreTurn}
         />
+
+        {script.trim() && (
+          <Automate
+            hasAudio={hasAudio}
+            scriptDirty={scriptDirty}
+            scenes={scenes}
+            clips={clips}
+            clipVersion={clipVersion}
+            projectId={projectId}
+            bible={project.visualBible}
+            styleId={project.stylePresetId}
+            conceptStyleId={project.conceptStylePresetId}
+            voicing={voicing}
+            canVoice={Boolean(voiceId && script.trim())}
+            onGenerateVoiceover={handleVoiceover}
+            cutting={cutting}
+            canCutScenes={words.length > 0}
+            onGenerateScenes={handleGenerateScenes}
+            onClipChange={handleClipChange}
+            onPreviewScene={handlePreviewScene}
+            refDoneIds={project.refDoneIds ?? []}
+            onToggleRef={handleToggleRef}
+          />
+        )}
 
         <VisualBibleView bible={project.visualBible} styleId={project.stylePresetId} />
 

@@ -97,6 +97,8 @@ export type Project = {
   /** Whether a voiceover blob exists in IndexedDB for this project. */
   hasAudio?: boolean;
   scenes?: Scene[];
+  /** Bible entity ids whose reference image the user has marked generated (Automate stepper). */
+  refDoneIds?: string[];
 };
 
 /** Trimmed voice shape surfaced to the client by /api/voices. */
