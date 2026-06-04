@@ -361,6 +361,10 @@ export default function Automate({
         clipVersion={clipVersion}
         onClipChange={onClipChange}
         onPreview={onPreviewScene}
+        images={images}
+        imageVersion={imageVersion}
+        onGenerateImage={onGenerateImage}
+        onDeleteImage={onDeleteImage}
       />
     );
   }

@@ -4,6 +4,7 @@ import type { Coverage } from "@/lib/scenes";
 import type { BibleCharacter, BibleLocation, Scene } from "@/lib/types";
 import { composeImagePrompt, styleForScene } from "@/lib/styles";
 import { buildSceneRecipes } from "@/lib/recipe";
+import type { ImageScope } from "@/lib/storage";
 import { formatClock } from "@/lib/text";
 import SceneCard from "./SceneCard";
 import CopyButton from "./CopyButton";
@@ -20,6 +21,10 @@ export default function SceneList({
   clipVersion,
   onClipChange,
   onPreview,
+  images,
+  imageVersion,
+  onGenerateImage,
+  onDeleteImage,
 }: {
   scenes: Scene[];
   styleId: string;
@@ -32,6 +37,15 @@ export default function SceneList({
   clipVersion: number;
   onClipChange: (index: number, hasClip: boolean) => void;
   onPreview: (scene: Scene) => void;
+  images?: Set<string>;
+  imageVersion?: number;
+  onGenerateImage?: (
+    scope: ImageScope,
+    key: string,
+    prompt: string,
+    referenceKeys?: string[],
+  ) => Promise<void>;
+  onDeleteImage?: (scope: ImageScope, key: string) => Promise<void>;
 }) {
   if (scenes.length === 0) return null;
 
@@ -86,6 +100,10 @@ export default function SceneList({
           clipVersion={clipVersion}
           onClipChange={onClipChange}
           onPreview={onPreview}
+          images={images}
+          imageVersion={imageVersion}
+          onGenerateImage={onGenerateImage}
+          onDeleteImage={onDeleteImage}
         />
       ))}
     </div>

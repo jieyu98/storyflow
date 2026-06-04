@@ -44,9 +44,12 @@ prompt-copy manual workflow still works with no Gemini key.
    StoryFlow still doesn't export video.)
 
 The **Automate** panel under the script ties this together as a guided stepper:
-the app-owned steps (**voiceover**, **scenes**) run in-app, and the handoff steps
-(**reference images**, then **scene 1, 2, …**) show the exact prompts and a
-checkbox / clip drop so you can work straight down the list.
+**voiceover** → **scenes** → **reference images** → **scene 1, 2, …**. With a
+`GEMINI_API_KEY`, the reference images and each scene's 9:16 starting frame can be
+**generated in-app** (Nano Banana) right from the step — scene frames pass that
+scene's reference images through for consistency. Without a key, each step still
+shows the exact prompt to copy into your own tool. You always supply the motion
+clips yourself.
 
 Projects are saved in a local **SQLite** database (`.data/storyflow.db`, created
 on first run) via the app's own API — the whole project as JSON, the mp3 as a

@@ -1,13 +1,14 @@
 "use client";
 
-import type { ReactNode } from "react";
+import { type ReactNode, useState } from "react";
 import type { Scene } from "@/lib/types";
 import type { SceneRecipe } from "@/lib/recipe";
 import { composeImagePrompt } from "@/lib/styles";
+import { imageUrl, type ImageScope } from "@/lib/storage";
 import { formatClock } from "@/lib/text";
 import CopyButton from "./CopyButton";
 import ClipDrop from "./ClipDrop";
-import { ImageIcon, MotionIcon, PlayIcon } from "./icons";
+import { ImageIcon, MotionIcon, PlayIcon, Spinner, TrashIcon } from "./icons";
 
 export default function SceneCard({
   scene,
@@ -18,6 +19,10 @@ export default function SceneCard({
   clipVersion,
   onClipChange,
   onPreview,
+  images,
+  imageVersion = 0,
+  onGenerateImage,
+  onDeleteImage,
 }: {
   scene: Scene;
   styleId: string;
@@ -27,9 +32,41 @@ export default function SceneCard({
   clipVersion: number;
   onClipChange: (index: number, hasClip: boolean) => void;
   onPreview: (scene: Scene) => void;
+  images?: Set<string>;
+  imageVersion?: number;
+  onGenerateImage?: (
+    scope: ImageScope,
+    key: string,
+    prompt: string,
+    referenceKeys?: string[],
+  ) => Promise<void>;
+  onDeleteImage?: (scope: ImageScope, key: string) => Promise<void>;
 }) {
   const hasPrompts = Boolean(scene.imagePrompt);
   const composedImage = composeImagePrompt(scene.imagePrompt, styleId);
+
+  const imgKey = String(scene.index);
+  const hasImage = images?.has(`scene:${scene.index}`) ?? false;
+  const canGenerate = Boolean(onGenerateImage && hasPrompts);
+  const refKeys = [
+    ...(scene.characterIds ?? []),
+    ...(scene.locationIds ?? []),
+  ];
+  const [busyImg, setBusyImg] = useState(false);
+  const [imgErr, setImgErr] = useState<string | null>(null);
+
+  async function generate() {
+    if (!onGenerateImage) return;
+    setBusyImg(true);
+    setImgErr(null);
+    try {
+      await onGenerateImage("scene", imgKey, composedImage, refKeys);
+    } catch (e) {
+      setImgErr(e instanceof Error ? e.message : "Generation failed.");
+    } finally {
+      setBusyImg(false);
+    }
+  }
 
   return (
     <article className="surface flex overflow-hidden">
@@ -96,12 +133,67 @@ export default function SceneCard({
 
         {hasPrompts ? (
           <div className="mt-4 space-y-3">
-            <PromptBlock
-              icon={<ImageIcon width={14} height={14} />}
-              label="Image prompt — starting frame"
-              text={composedImage}
-              accent="ember"
-            />
+            <div className="rounded-xl border border-[var(--line)] bg-ink-950/50 p-3">
+              <div className="mb-2 flex items-center justify-between gap-2">
+                <span className="flex items-center gap-1.5 text-xs font-semibold text-ember-300">
+                  <ImageIcon width={14} height={14} />
+                  Image prompt — starting frame
+                </span>
+                <div className="flex items-center gap-2">
+                  {canGenerate && (
+                    <button
+                      type="button"
+                      onClick={generate}
+                      disabled={busyImg}
+                      className="btn btn-ember !px-3 !py-1.5 !text-xs"
+                    >
+                      {busyImg ? (
+                        <>
+                          <Spinner width={13} height={13} /> Generating…
+                        </>
+                      ) : hasImage ? (
+                        "Regenerate"
+                      ) : (
+                        "Generate"
+                      )}
+                    </button>
+                  )}
+                  <CopyButton text={composedImage} />
+                </div>
+              </div>
+              {hasImage && (
+                <div className="mb-2 flex items-start gap-3">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src={imageUrl(projectId, "scene", imgKey, imageVersion)}
+                    alt={scene.name ?? `Scene ${scene.index + 1}`}
+                    className="aspect-[9/16] w-20 shrink-0 rounded-md border border-[var(--line)] object-cover"
+                  />
+                  {onDeleteImage && (
+                    <button
+                      type="button"
+                      onClick={() => onDeleteImage("scene", imgKey)}
+                      className="btn btn-ghost !px-2 !py-1 !text-xs"
+                    >
+                      <TrashIcon width={13} height={13} /> Remove
+                    </button>
+                  )}
+                </div>
+              )}
+              {imgErr && (
+                <p className="mb-2 text-xs text-ember-300">{imgErr}</p>
+              )}
+              {canGenerate && refKeys.length > 0 && (
+                <p className="mb-2 text-[0.68rem] text-faint">
+                  Uses {refKeys.length} reference
+                  {refKeys.length > 1 ? "s" : ""} for consistency (generate those
+                  first).
+                </p>
+              )}
+              <p className="whitespace-pre-wrap font-mono text-xs leading-relaxed text-muted">
+                {composedImage}
+              </p>
+            </div>
             <PromptBlock
               icon={<MotionIcon width={14} height={14} />}
               label="Animation prompt"

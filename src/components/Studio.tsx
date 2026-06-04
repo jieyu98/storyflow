@@ -477,6 +477,10 @@ export default function Studio({ projectId }: { projectId: string }) {
             clipVersion={clipVersion}
             onClipChange={handleClipChange}
             onPreview={handlePreviewScene}
+            images={images}
+            imageVersion={imageVersion}
+            onGenerateImage={handleGenerateImage}
+            onDeleteImage={handleDeleteImage}
           />
         )}
       </div>

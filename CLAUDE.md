@@ -103,11 +103,16 @@ step 4 (image gen); the scene geometry/timing is computed locally.
   `[id]/clips` (list) + `[id]/clips/[index]` GET/PUT/DELETE, and `[id]/images`
   (list) + `[id]/images/generate` (POST) + `[id]/images/[scope]/[key]` GET/DELETE.
 - `src/components/Automate.tsx` — the **Automate stepper** shown under the script:
-  a guided, ordered walk through the pipeline. Steps are tagged `auto` (the app
-  does it: voiceover, scenes) or `you` (a guided handoff — the app shows the
-  prompts, you generate the image/clip in your own tools and drop it in). The
-  reference-images step checkboxes persist via `Project.refDoneIds`; per-scene
-  steps reuse `SceneCard` and complete when a clip is uploaded.
+  a guided, ordered walk through the pipeline (voiceover → scenes → reference
+  images → per scene). The **reference-images** step generates each bible
+  entity's image with Nano Banana (or copy the prompt / tick `Project.refDoneIds`
+  to do it manually). Per-scene steps reuse `SceneCard`, which now also has a
+  **Generate** button for the scene's 9:16 starting frame — it passes that scene's
+  `characterIds`/`locationIds` reference images (the ones already generated) to
+  Gemini for cross-shot consistency. Clips (motion) are still user-supplied.
+- `src/components/SceneCard.tsx` — per-scene card: prompts, recipe, optional
+  in-app starting-frame generation (when the `onGenerateImage` props are passed),
+  and the clip drop. Used by both the stepper and `SceneList`.
 - `src/components/ClipDrop.tsx` — per-scene clip upload (drag/drop → `/clips`).
 - `src/components/PreviewPlayer.tsx` + `src/remotion/PreviewComposition.tsx` — the
   9:16 preview. It is a **Remotion `<Player>`** (a player, NOT a renderer — no
