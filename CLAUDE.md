@@ -19,12 +19,15 @@ add in-app media generation without asking.
 2. **Generate voiceover** (`/api/tts` → ElevenLabs only). Script →
    `with-timestamps` endpoint → `{ audioBase64, alignment }` (character-level).
    No Claude here.
-3. **Generate scenes** (`/api/scenes` → Claude, one pass). The AI gets the
-   narration as numbered words tagged with end-times + the visual bible, and
+3. **Generate scenes** (`/api/scenes` → Claude, one pass). Gets `scriptStyleId` +
+   the narration as numbered words tagged with end-times + the visual bible, and
    returns ordered **beats** (`emit_scenes`: each beat = the word index it ENDS
-   on, a name, image prompt, animation prompt, characterIds). `/api/scenes` then
-   calls `buildScenesFromBeats` to turn those into contiguous scenes with EXACT
-   timing from the timestamps.
+   on, a name, `shotType`, image prompt, animation prompt, `visualMode`
+   live/concept, optional `onScreenText`, `characterIds`, `locationIds`). The
+   scene **system prompt is per writing style** (`getSceneSystem` → `SCENE_SYSTEM`
+   for stories, `SCENE_SYSTEM_EXPLAINER` for the YSK explainer). `/api/scenes`
+   then calls `buildScenesFromBeats` to turn the beats into contiguous scenes
+   with EXACT timing from the timestamps.
 
 So Claude is called in steps 1 and 3; ElevenLabs only in step 2; the scene
 geometry/timing is computed locally.
@@ -34,10 +37,23 @@ geometry/timing is computed locally.
 - The **AI picks the beat boundaries** (semantic visual beats), the **timestamps
   give the real durations**. There are **no fixed 4/6/8/10 buckets** — that was
   removed. Don't reintroduce duration toggles.
-- Clip length is an **integer**: `min(ceil(spokenSeconds), maxClipSeconds)`
-  (image-to-video tools take whole seconds; default max 10s, user-adjustable).
-  `scene.clamped` is set if a beat runs longer than the cap (audio would
-  overflow).
+- Clip length is an **integer**: `min(ceil(spokenSeconds), MAX_CLIP_SECONDS)`
+  (image-to-video tools take whole seconds). The **AI chooses each beat's length**
+  by content + pacing; `MAX_CLIP_SECONDS` (15) is a fixed hard ceiling — the old
+  user-adjustable max-clip control was removed. `scene.clamped` is set if a beat
+  exceeds the ceiling.
+- **Two-track visuals**: each beat is tagged `visualMode` **live** (a real,
+  filmable object/action → the project's primary art style) or **concept** (a
+  visualization of an invisible idea → `conceptStylePresetId`). `styleForScene`
+  resolves the style per scene at display time. `shotType` drives shot variety;
+  `onScreenText` is an overlay caption kept OUT of the image prompt (image tools
+  garble text).
+- **Cross-shot consistency**: `composeReferencePrompt` builds a canonical
+  reference-image prompt per bible entity (surfaced in `VisualBibleView`); beats
+  carry `characterIds`/`locationIds` so each scene knows which reference to reuse.
+- **Per-scene recipe** (`src/lib/recipe.ts`, `buildSceneRecipes`): a pure,
+  deterministic step-by-step production guide per scene (generate fresh vs upload
+  a reference; image→video vs extend), computed at render time.
 - `buildScenesFromBeats` (`src/lib/scenes.ts`) is deliberately robust to bad AI
   indices: ranges are forced contiguous and the last scene always reaches the
   final word. It derives scene `text`/timing from the words, not from any
@@ -51,11 +67,18 @@ geometry/timing is computed locally.
   project list. Client component; creates the `Project` and routes to studio.
 - `src/app/studio/[projectId]/page.tsx` → `src/components/Studio.tsx` — the
   orchestrator (script, bible, voiceover, scene generation, persistence).
-- `src/lib/types.ts` — shared types; `Project`, `Scene`, `DEFAULT_MAX_CLIP_SECONDS`.
-- `src/lib/scriptStyles.ts` — writing-style presets (system prompts) + `SAFETY`.
-- `src/lib/styles.ts` — art-style presets; `composeImagePrompt` appends the
-  style at display time (so switching styles never re-calls AI).
-- `src/lib/prompts.ts` — tool schemas (`STORY_TOOL`, `SCENE_TOOL`) + scene system prompt.
+- `src/lib/types.ts` — shared types; `Project`, `Scene`, `MAX_CLIP_SECONDS`.
+- `src/lib/scriptStyles.ts` — writing-style presets (system prompts) + `SAFETY`;
+  a style may override the scene prompt (`sceneSystem`) and recommend art styles
+  (`recommendedArtStyleId`/`recommendedConceptStyleId`); `getSceneSystem` /
+  `getScriptStyle` resolve them.
+- `src/lib/styles.ts` — art-style presets; `composeImagePrompt` appends the style
+  at display time (switching styles never re-calls AI); `styleForScene` picks
+  primary vs concept style per scene; `composeReferencePrompt` builds the
+  per-entity reference-image prompt.
+- `src/lib/prompts.ts` — tool schemas (`STORY_TOOL`, `SCENE_TOOL`) + scene system
+  prompts: `SCENE_SYSTEM` (story styles) and `SCENE_SYSTEM_EXPLAINER` (YSK explainer).
+- `src/lib/recipe.ts` — `buildSceneRecipes`: per-scene production steps (pure).
 - `src/lib/anthropic.ts` — `generateStory`, `generateSceneBeats` (forced tool use + prompt caching).
 - `src/lib/elevenlabs.ts` — `listVoices` (v2), `ttsWithTimestamps`.
 - `src/lib/storage.ts` — **client** async wrapper over `/api/projects` (+ a
@@ -94,9 +117,9 @@ npm run build    # production build (runs typecheck)
 node_modules/.bin/tsc --noEmit   # typecheck only
 ```
 
-Pure logic in `src/lib/scenes.ts` / `alignment.ts` is unit-testable by compiling
-those two files standalone (`tsc <files> --outDir /tmp/... --module commonjs`)
-and running with node — no app or keys needed.
+Pure logic in `src/lib/scenes.ts` / `alignment.ts` / `recipe.ts` is unit-testable
+by compiling those files standalone (`tsc <files> --outDir /tmp/... --module
+commonjs`) and running with node — no app or keys needed.
 
 ## Gotchas
 

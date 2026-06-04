@@ -22,12 +22,18 @@ Kling / Veo / Grok (motion).
    timestamped voiceover.
 4. Hit **Generate scenes**. The AI reads the narration *with its word
    timestamps* and cuts it into visual beats, writing each beat's image +
-   animation prompt in the same pass. Clip length = the beat's real spoken
-   seconds rounded **up to a whole second**, capped at a max you set
-   (default 10s).
-5. Each scene card has its beat name, time range, integer clip length, and copy
-   buttons for the image prompt (art-style preset appended) and animation
-   prompt.
+   animation prompt in the same pass. It **chooses each beat's length** from its
+   content and pacing (integer seconds, hard ceiling 15s — no manual max). Every
+   beat is tagged **live** (a real, filmable shot) or **concept** (a diagram /
+   visualization of an invisible idea); the two render in different art styles
+   automatically. The storyboard prompt itself is **per writing style** (the YSK
+   explainer gets its own director).
+5. Each scene card shows its beat name, time range, integer clip length, shot
+   type, and copy buttons for the image prompt (the right art-style preset
+   appended) and animation prompt — plus any **on-screen text** to overlay, a
+   **production recipe** (generate fresh vs. reuse a reference image; image→video
+   vs. extend), and which **reference images** to reuse for consistency. The
+   Visual bible has a copy button for each entity's canonical **reference prompt**.
 6. Generate each clip in your own image-to-video tool, then **drag it onto its
    scene** and hit **Preview** — the clips play in order under the voiceover
    (scenes without a clip show a placeholder).
@@ -60,13 +66,18 @@ Key modules:
 
 - `src/lib/alignment.ts` — word timings from ElevenLabs character alignment.
 - `src/lib/scenes.ts` — assembles the AI's chosen beats into contiguous scenes
-  with exact timing (integer clip = `ceil(spoken seconds)`, capped at the max).
-- `src/lib/anthropic.ts` / `src/lib/prompts.ts` — structured story generation
-  and the single cut-and-prompt pass (AI picks beats from the timestamped
-  narration and writes each beat's prompts).
+  with exact timing (integer clip = `ceil(spoken seconds)`, capped at the fixed
+  `MAX_CLIP_SECONDS` = 15s ceiling).
+- `src/lib/recipe.ts` — derives each scene's step-by-step production recipe.
+- `src/lib/anthropic.ts` / `src/lib/prompts.ts` — structured story generation and
+  the cut-and-prompt pass. `prompts.ts` holds two scene system prompts:
+  `SCENE_SYSTEM` (story styles) and `SCENE_SYSTEM_EXPLAINER` (explainer).
 - `src/lib/scriptStyles.ts` — writing-style presets (the system prompt Claude
-  adopts) + shared safety guardrails.
-- `src/lib/styles.ts` — art-style presets, appended to every image prompt.
+  adopts) + shared safety guardrails; a style can override the scene prompt and
+  recommend art styles.
+- `src/lib/styles.ts` — art-style presets (`composeImagePrompt` appends one at
+  copy time), `styleForScene` (live vs. concept), and `composeReferencePrompt`
+  (per-entity reference image for consistency).
 - `src/server/db.ts` — SQLite persistence (better-sqlite3).
 - `src/app/api/*` — `story`, `voices`, `tts`, `scenes`, and `projects` (CRUD +
   audio) route handlers.
@@ -74,14 +85,17 @@ Key modules:
 ## Customizing
 
 - **Writing styles** — add an entry to `SCRIPT_STYLES` in
-  `src/lib/scriptStyles.ts`. Each carries its own `system` prompt. Ships with
-  _Straight narrator_ (faithful) and _Recognition shorts_ (emotional-recognition
-  persona). Both inherit the shared `SAFETY` guardrails.
+  `src/lib/scriptStyles.ts`. Each carries its own `system` prompt and may add an
+  optional `sceneSystem` (its own storyboard prompt) plus recommended art styles.
+  Ships with _Straight narrator_, _Recognition shorts_, and _You should know_
+  (r/YouShouldKnow explainer). All inherit the shared `SAFETY` guardrails.
 - **Art styles** — add an entry to `ART_STYLES` in `src/lib/styles.ts`. Its
-  `prompt` string is appended to every scene's image prompt at copy time, so
-  switching styles never re-calls the AI.
-- **Max clip length** — per project, set with the stepper in the Studio
-  (default `DEFAULT_MAX_CLIP_SECONDS` in `src/lib/types.ts`).
+  `prompt` string is appended to a scene's image prompt at copy time, so switching
+  styles never re-calls the AI. Ships with Pixar Campfire, Clean Explainer 3D,
+  Documentary Realism, and Explainer Graphics (the flat look used for _concept_
+  scenes).
+- **Clip length** — chosen by the AI per beat (no manual control); the hard
+  ceiling is `MAX_CLIP_SECONDS` in `src/lib/types.ts`.
 
 ## Scripts
 
