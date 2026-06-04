@@ -1,10 +1,17 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
-import { clipUrl } from "@/lib/storage";
+import { Player, type PlayerRef } from "@remotion/player";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { formatTime } from "@/lib/text";
 import type { Scene } from "@/lib/types";
+import { PreviewComposition, type PreviewProps } from "@/remotion/PreviewComposition";
 import { PauseIcon, PlayIcon } from "./icons";
+
+// The voiceover is the master clock, so the visuals are sampled at audio rate.
+// 30fps is plenty for previewing uploaded clips and keeps seeking snappy.
+const FPS = 30;
+const COMPOSITION_WIDTH = 1080;
+const COMPOSITION_HEIGHT = 1920;
 
 export default function PreviewPlayer({
   audioSrc,
@@ -23,15 +30,28 @@ export default function PreviewPlayer({
   duration?: number;
   seekReq?: { t: number; n: number } | null;
 }) {
-  const audioRef = useRef<HTMLAudioElement>(null);
-  const videoRef = useRef<HTMLVideoElement>(null);
-  const loadedKey = useRef<string>("");
+  const playerRef = useRef<PlayerRef>(null);
+  const [mounted, setMounted] = useState(false);
   const [playing, setPlaying] = useState(false);
-  const [time, setTime] = useState(0);
-  const [dur, setDur] = useState(
-    duration ?? (scenes.length ? scenes[scenes.length - 1].tSpokenEnd : 0),
+  const [frame, setFrame] = useState(0);
+
+  const durSec =
+    duration ?? (scenes.length ? scenes[scenes.length - 1].tSpokenEnd : 0);
+  const totalFrames = Math.max(1, Math.round(durSec * FPS));
+
+  // Remotion's <Player> is browser-only; don't mount it during SSR.
+  useEffect(() => setMounted(true), []);
+
+  const inputProps = useMemo<PreviewProps>(
+    () => ({
+      scenes,
+      clipIndices: Array.from(clips),
+      projectId,
+      clipVersion,
+      audioSrc,
+    }),
+    [scenes, clips, projectId, clipVersion, audioSrc],
   );
-  const [idx, setIdx] = useState(0);
 
   function sceneAt(t: number): number {
     let i = 0;
@@ -42,145 +62,140 @@ export default function PreviewPlayer({
     return i;
   }
 
-  // Load the right clip into the <video> for the current scene + seek its offset.
+  // Mirror the player's clock into local state so the custom controls update.
   useEffect(() => {
-    const v = videoRef.current;
-    if (!v) return;
-    const sc = scenes[idx];
-    if (sc && clips.has(sc.index)) {
-      const key = `${sc.index}:${clipVersion}`;
-      const offset = Math.max(0, (audioRef.current?.currentTime ?? 0) - sc.tStart);
-      const seekIn = () => {
-        try {
-          v.currentTime = Math.min(offset, v.duration || offset);
-        } catch {
-          /* not seekable yet */
-        }
-        if (playing) void v.play().catch(() => {});
-      };
-      if (loadedKey.current !== key) {
-        loadedKey.current = key;
-        v.src = clipUrl(projectId, sc.index, clipVersion);
-        v.onloadedmetadata = seekIn;
-      } else {
-        seekIn();
-      }
-    } else {
-      loadedKey.current = "";
-      v.removeAttribute("src");
-      try {
-        v.load();
-      } catch {
-        /* ignore */
-      }
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [idx, clipVersion]);
+    const p = playerRef.current;
+    if (!p) return;
+    const onFrame = (e: { detail: { frame: number } }) => setFrame(e.detail.frame);
+    const onPlay = () => setPlaying(true);
+    const onPause = () => setPlaying(false);
+    p.addEventListener("frameupdate", onFrame);
+    p.addEventListener("play", onPlay);
+    p.addEventListener("pause", onPause);
+    p.addEventListener("ended", onPause);
+    return () => {
+      p.removeEventListener("frameupdate", onFrame);
+      p.removeEventListener("play", onPlay);
+      p.removeEventListener("pause", onPause);
+      p.removeEventListener("ended", onPause);
+    };
+  }, [mounted]);
 
   // External "jump to this scene" requests (the ▶ Preview button on a card).
   useEffect(() => {
     if (!seekReq) return;
-    const a = audioRef.current;
-    if (!a) return;
-    const t = Math.max(0, Math.min(seekReq.t, dur || seekReq.t));
-    a.currentTime = t;
-    setTime(t);
-    setIdx(sceneAt(t));
-    void a.play();
+    const p = playerRef.current;
+    if (!p) return;
+    const f = Math.max(0, Math.min(Math.round(seekReq.t * FPS), totalFrames - 1));
+    p.seekTo(f);
+    p.play();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [seekReq]);
 
   function toggle() {
-    const a = audioRef.current;
-    if (!a) return;
-    if (playing) a.pause();
-    else void a.play();
+    const p = playerRef.current;
+    if (!p) return;
+    if (p.isPlaying()) p.pause();
+    else p.play();
   }
 
   function seek(e: React.MouseEvent<HTMLDivElement>) {
-    const a = audioRef.current;
-    if (!a || !dur) return;
+    const p = playerRef.current;
+    if (!p || !totalFrames) return;
     const rect = e.currentTarget.getBoundingClientRect();
     const ratio = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
-    const t = ratio * dur;
-    a.currentTime = t;
-    setTime(t);
-    const ni = sceneAt(t);
-    setIdx(ni);
-    const v = videoRef.current;
-    const sc = scenes[ni];
-    if (v && sc && clips.has(sc.index)) {
-      try {
-        v.currentTime = Math.max(0, t - sc.tStart);
-      } catch {
-        /* ignore */
-      }
-    }
+    p.seekTo(Math.round(ratio * (totalFrames - 1)));
   }
 
-  const cur = scenes[idx];
-  const hasClipNow = Boolean(cur && clips.has(cur.index));
-  const pct = dur ? (time / dur) * 100 : 0;
+  const time = frame / FPS;
+  const dur = totalFrames / FPS;
+  const idx = sceneAt(time);
+  const pct = totalFrames ? (frame / totalFrames) * 100 : 0;
   const uploaded = scenes.filter((s) => clips.has(s.index)).length;
 
   return (
     <div>
-      <audio
-        ref={audioRef}
-        src={audioSrc}
-        preload="metadata"
-        onPlay={() => {
-          setPlaying(true);
-          const v = videoRef.current;
-          if (v && v.getAttribute("src")) void v.play().catch(() => {});
-        }}
-        onPause={() => {
-          setPlaying(false);
-          videoRef.current?.pause();
-        }}
-        onTimeUpdate={(e) => {
-          const t = e.currentTarget.currentTime;
-          setTime(t);
-          const ni = sceneAt(t);
-          if (ni !== idx) setIdx(ni);
-        }}
-        onLoadedMetadata={(e) => {
-          const d = e.currentTarget.duration;
-          if (Number.isFinite(d) && d > 0) setDur(d);
-        }}
-        onEnded={() => {
-          setPlaying(false);
-          videoRef.current?.pause();
-        }}
-      />
-
       {/* 9:16 stage */}
       <div className="relative mx-auto aspect-[9/16] w-full max-w-[260px] overflow-hidden rounded-2xl border border-[var(--line)] bg-black shadow-[0_24px_60px_-30px_rgba(0,0,0,0.9)]">
-        <video
-          ref={videoRef}
-          className="h-full w-full object-cover"
-          muted
-          playsInline
-          preload="auto"
-          style={{ display: hasClipNow ? "block" : "none" }}
-        />
-        {!hasClipNow && (
-          <div className="absolute inset-0 flex flex-col items-center justify-center gap-1 px-4 text-center">
-            <span className="text-[0.65rem] uppercase tracking-wider text-faint">
-              no clip yet
-            </span>
-            <span className="font-display text-sm text-cream">
-              {cur?.name ?? `Scene ${idx + 1}`}
-            </span>
-          </div>
+        {mounted && (
+          <Player
+            ref={playerRef}
+            component={PreviewComposition}
+            inputProps={inputProps}
+            durationInFrames={totalFrames}
+            fps={FPS}
+            compositionWidth={COMPOSITION_WIDTH}
+            compositionHeight={COMPOSITION_HEIGHT}
+            style={{ width: "100%", height: "100%" }}
+            controls={false}
+            clickToPlay={false}
+            doubleClickToFullscreen={false}
+            spaceKeyToPlayOrPause={false}
+            acknowledgeRemotionLicense
+          />
         )}
         <div className="absolute left-2 top-2 chip !py-1 !text-[0.6rem]">
           {idx + 1}/{scenes.length}
         </div>
       </div>
 
-      {/* controls */}
-      <div className="mx-auto mt-3 flex max-w-[320px] items-center gap-3">
+      {/* full-width scene timeline */}
+      <div
+        onClick={seek}
+        className="relative mt-4 w-full cursor-pointer select-none overflow-hidden rounded-xl border border-[var(--line)] bg-ink-900/60"
+      >
+        <div className="flex h-14">
+          {scenes.map((s, i) => {
+            const next = scenes[i + 1];
+            const segEnd = next ? next.tStart : dur;
+            const w = dur ? ((segEnd - s.tStart) / dur) * 100 : 0;
+            const has = clips.has(s.index);
+            const active = i === idx;
+            return (
+              <div
+                key={s.index}
+                title={s.name ?? `Scene ${i + 1}`}
+                style={{ width: `${w}%` }}
+                className={`relative flex min-w-0 flex-col justify-between overflow-hidden border-l border-[var(--line)] px-2 py-1.5 transition-colors first:border-l-0 ${
+                  active ? "bg-ember-500/15" : ""
+                }`}
+              >
+                <span
+                  className={`font-mono text-[0.6rem] leading-none ${
+                    active ? "text-ember-300" : "text-faint"
+                  }`}
+                >
+                  {i + 1}
+                </span>
+                <span
+                  className={`truncate text-[0.62rem] leading-tight ${
+                    active ? "text-cream" : "text-faint/80"
+                  }`}
+                >
+                  {s.name ?? ""}
+                </span>
+                <span
+                  className={`mt-0.5 h-1 w-full rounded-full ${
+                    has ? "bg-mint-400/70" : "bg-white/10"
+                  }`}
+                />
+              </div>
+            );
+          })}
+        </div>
+        {/* played tint + playhead */}
+        <div
+          className="pointer-events-none absolute inset-y-0 left-0 bg-ember-500/10"
+          style={{ width: `${pct}%` }}
+        />
+        <div
+          className="pointer-events-none absolute inset-y-0 w-px bg-ember-400 shadow-[0_0_8px_rgba(255,184,119,0.85)]"
+          style={{ left: `${pct}%` }}
+        />
+      </div>
+
+      {/* control bar */}
+      <div className="mt-3 flex items-center gap-3">
         <button
           type="button"
           onClick={toggle}
@@ -193,32 +208,18 @@ export default function PreviewPlayer({
             <PlayIcon width={16} height={16} className="ml-0.5" />
           )}
         </button>
-        <div className="min-w-0 flex-1">
-          <div
-            onClick={seek}
-            className="relative h-2 cursor-pointer rounded-full bg-white/8"
-          >
-            <div
-              className="absolute inset-y-0 left-0 rounded-full bg-gradient-to-r from-ember-500 to-ember-400"
-              style={{ width: `${pct}%` }}
-            />
-            {dur > 0 &&
-              scenes.slice(1).map((s) => (
-                <span
-                  key={s.index}
-                  className="absolute top-1/2 h-2.5 w-px -translate-y-1/2 bg-cream/25"
-                  style={{ left: `${(s.tStart / dur) * 100}%` }}
-                />
-              ))}
-          </div>
-          <div className="mt-1 flex justify-between font-mono text-[0.65rem] text-faint">
-            <span>{formatTime(time)}</span>
-            <span className={uploaded === scenes.length ? "text-mint-400" : ""}>
-              {uploaded}/{scenes.length} clips
-            </span>
-            <span>{formatTime(dur)}</span>
-          </div>
-        </div>
+        <span className="font-mono text-[0.7rem] text-faint">
+          {formatTime(time)}{" "}
+          <span className="text-faint/50">/ {formatTime(dur)}</span>
+        </span>
+        <div className="flex-1" />
+        <span
+          className={`font-mono text-[0.65rem] ${
+            uploaded === scenes.length ? "text-mint-400" : "text-faint"
+          }`}
+        >
+          {uploaded}/{scenes.length} clips
+        </span>
       </div>
     </div>
   );
