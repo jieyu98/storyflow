@@ -6,9 +6,11 @@ with ElevenLabs (with word-level timestamps), cuts it into timed scenes, and
 hands you a **starting-frame image prompt** and an **animation prompt** for each
 scene — ready to paste into your own image and image-to-video tools.
 
-StoryFlow does **not** generate images or video itself. It produces text + the
-voiceover audio; you take the prompts to Nano Banana / GPT-Image (stills) and
-Kling / Veo / Grok (motion).
+StoryFlow produces text + the voiceover audio, and can **generate the still
+images in-app** with Gemini ("Nano Banana") — optional, behind your own
+`GEMINI_API_KEY`. It does **not** generate **video**: you make the motion clips in
+your own image-to-video tool (Grok / Kling / Veo) and drop them in. The
+prompt-copy manual workflow still works with no Gemini key.
 
 ## How it works
 
@@ -64,6 +66,8 @@ Required env vars (see `.env.example`):
 
 - `ANTHROPIC_API_KEY` — script, visual bible, and scene cut/prompts.
 - `ELEVENLABS_API_KEY` — voice list + timestamped voiceover.
+- `GEMINI_API_KEY` — *optional*; in-app still generation ("Nano Banana"). Without
+  it, copy the prompts into your own image tool instead.
 
 ## Stack
 

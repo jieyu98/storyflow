@@ -11,6 +11,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { buildSceneRecipes } from "@/lib/recipe";
 import { composeReferencePrompt, styleForScene } from "@/lib/styles";
+import { imageUrl, type ImageScope } from "@/lib/storage";
 import type { Scene, VisualBible } from "@/lib/types";
 import CopyButton from "./CopyButton";
 import SceneCard from "./SceneCard";
@@ -21,6 +22,7 @@ import {
   ImageIcon,
   SparkIcon,
   Spinner,
+  TrashIcon,
 } from "./icons";
 
 type StepKind = "auto" | "you";
@@ -45,6 +47,10 @@ export default function Automate({
   onPreviewScene,
   refDoneIds,
   onToggleRef,
+  images,
+  imageVersion,
+  onGenerateImage,
+  onDeleteImage,
 }: {
   hasAudio: boolean;
   scriptDirty: boolean;
@@ -65,6 +71,15 @@ export default function Automate({
   onPreviewScene: (scene: Scene) => void;
   refDoneIds: string[];
   onToggleRef: (id: string, done: boolean) => void;
+  images: Set<string>;
+  imageVersion: number;
+  onGenerateImage: (
+    scope: ImageScope,
+    key: string,
+    prompt: string,
+    referenceKeys?: string[],
+  ) => Promise<void>;
+  onDeleteImage: (scope: ImageScope, key: string) => Promise<void>;
 }) {
   const entities = useMemo(
     () => [
@@ -74,7 +89,10 @@ export default function Automate({
     [bible],
   );
   const refsDone =
-    entities.length === 0 || entities.every((e) => refDoneIds.includes(e.id));
+    entities.length === 0 ||
+    entities.every(
+      (e) => images.has(`ref:${e.id}`) || refDoneIds.includes(e.id),
+    );
 
   const recipes = useMemo(
     () => buildSceneRecipes(scenes, bible),
@@ -131,6 +149,32 @@ export default function Automate({
   useEffect(() => {
     setOpenKey(activeKey);
   }, [activeKey]);
+
+  const [busyImg, setBusyImg] = useState<string | null>(null);
+  const [imgError, setImgError] = useState<{ key: string; msg: string } | null>(
+    null,
+  );
+
+  async function gen(
+    scope: ImageScope,
+    key: string,
+    prompt: string,
+    referenceKeys?: string[],
+  ) {
+    const id = `${scope}:${key}`;
+    setBusyImg(id);
+    setImgError(null);
+    try {
+      await onGenerateImage(scope, key, prompt, referenceKeys);
+    } catch (e) {
+      setImgError({
+        key: id,
+        msg: e instanceof Error ? e.message : "Generation failed.",
+      });
+    } finally {
+      setBusyImg(null);
+    }
+  }
 
   function body(step: Step) {
     if (step.kind === "auto" && step.key === "voiceover") {
@@ -215,38 +259,87 @@ export default function Automate({
       return (
         <div>
           <p className="mb-3 text-sm text-faint">
-            Generate each reference once in your image tool, then reuse it in
-            every scene that entity appears in — that&rsquo;s what keeps them
-            consistent. Tick each off as you go.
+            Generate each reference once — it&rsquo;s then reused in every scene
+            that entity appears in, which is what keeps them consistent.
+            Generate in-app with Nano Banana, or copy the prompt to your own
+            tool and tick it done.
           </p>
           <ul className="space-y-2">
             {entities.map((e) => {
-              const done = refDoneIds.includes(e.id);
+              const imgKey = `ref:${e.id}`;
+              const hasImg = images.has(imgKey);
+              const manual = refDoneIds.includes(e.id);
+              const done = hasImg || manual;
+              const busy = busyImg === imgKey;
+              const prompt = composeReferencePrompt(e, styleId, e.kind);
               return (
-                <li
-                  key={e.id}
-                  className="flex items-center gap-3 rounded-lg border border-[var(--line)] px-3 py-2"
-                >
-                  <button
-                    type="button"
-                    onClick={() => onToggleRef(e.id, !done)}
-                    aria-label={done ? "Mark not done" : "Mark generated"}
-                    className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-md border transition-colors ${
-                      done
-                        ? "border-mint-400 bg-mint-400/20 text-mint-400"
-                        : "border-[var(--line-strong)] text-transparent"
-                    }`}
-                  >
-                    <CheckIcon width={12} height={12} />
-                  </button>
-                  <span className="min-w-0 flex-1 truncate text-sm text-cream">
-                    {e.name}
-                    <span className="ml-2 chip">{e.kind}</span>
-                  </span>
-                  <CopyButton
-                    text={composeReferencePrompt(e, styleId, e.kind)}
-                    label="Copy prompt"
-                  />
+                <li key={e.id}>
+                  <div className="flex items-center gap-3 rounded-lg border border-[var(--line)] px-3 py-2">
+                    <div className="relative h-12 w-12 shrink-0 overflow-hidden rounded-md border border-[var(--line)] bg-ink-950/50">
+                      {hasImg ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img
+                          src={imageUrl(projectId, "ref", e.id, imageVersion)}
+                          alt={e.name}
+                          className="h-full w-full object-cover"
+                        />
+                      ) : (
+                        <span className="flex h-full w-full items-center justify-center text-faint">
+                          <ImageIcon width={16} height={16} />
+                        </span>
+                      )}
+                      {done && (
+                        <span className="absolute right-0 top-0 flex h-4 w-4 items-center justify-center rounded-bl-md bg-mint-400/90 text-ink-950">
+                          <CheckIcon width={10} height={10} />
+                        </span>
+                      )}
+                    </div>
+                    <span className="min-w-0 flex-1 truncate text-sm text-cream">
+                      {e.name}
+                      <span className="ml-2 chip">{e.kind}</span>
+                    </span>
+                    <CopyButton text={prompt} label="Copy" />
+                    <button
+                      type="button"
+                      onClick={() => gen("ref", e.id, prompt)}
+                      disabled={busy}
+                      className="btn btn-ember !px-3 !py-1.5 !text-xs"
+                    >
+                      {busy ? (
+                        <>
+                          <Spinner width={13} height={13} /> Generating…
+                        </>
+                      ) : hasImg ? (
+                        "Regenerate"
+                      ) : (
+                        "Generate"
+                      )}
+                    </button>
+                    {hasImg ? (
+                      <button
+                        type="button"
+                        onClick={() => onDeleteImage("ref", e.id)}
+                        aria-label="Remove image"
+                        className="btn btn-ghost !px-2 !py-1.5 !text-xs"
+                      >
+                        <TrashIcon width={14} height={14} />
+                      </button>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => onToggleRef(e.id, !manual)}
+                        title="Mark done (if you generated it elsewhere)"
+                        className={`btn btn-ghost !px-2 !py-1.5 !text-xs ${manual ? "text-mint-400" : ""}`}
+                      >
+                        <CheckIcon width={14} height={14} />
+                      </button>
+                    )}
+                  </div>
+                  {imgError?.key === imgKey && (
+                    <p className="mt-1 px-1 text-xs text-ember-300">
+                      {imgError.msg}
+                    </p>
+                  )}
                 </li>
               );
             })}
@@ -292,10 +385,10 @@ export default function Automate({
 
       <p className="mt-3 text-xs text-faint">
         Guided pipeline. The app makes the{" "}
-        <span className="text-cream">voiceover</span> and{" "}
-        <span className="text-cream">scenes</span>; you generate the{" "}
-        <span className="text-cream">images &amp; clips</span> in your own tools
-        and drop them in.
+        <span className="text-cream">voiceover</span>,{" "}
+        <span className="text-cream">scenes</span>, and{" "}
+        <span className="text-cream">reference images</span> (Nano Banana); you
+        still bring the <span className="text-cream">video clips</span>.
       </p>
 
       <ol className="mt-4 space-y-2">

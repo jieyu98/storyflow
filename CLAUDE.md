@@ -6,10 +6,13 @@ A Next.js 16 / React 19 / Tailwind v4 app that turns pasted Reddit text into the
 assets for a short-form vertical (9:16) video: a narration script, an ElevenLabs
 voiceover, and per-scene image + animation prompts.
 
-**Firm product boundary:** the app outputs **text + the voiceover mp3 only**. It
-never generates images or video — the user copies prompts into their own tools
-(images: Nano Banana / GPT-Image; motion: Grok image-to-video, currently). Don't
-add in-app media generation without asking.
+**Product boundary:** the app's core output is **text + the voiceover mp3**, and
+it can now **generate still images in-app** via Gemini ("Nano Banana") — gated
+behind `GEMINI_API_KEY` and an explicit user action (the Automate stepper). It
+still does **not** generate **video / motion**: clips are made by the user in
+their own image-to-video tool (Grok / Kling / Veo) and dropped in. The prompt-copy
+manual workflow remains a first-class path (works with no Gemini key). **Don't add
+in-app video generation, or call any new media API, without asking.**
 
 ## Pipeline (which step calls what)
 
@@ -28,9 +31,14 @@ add in-app media generation without asking.
    for stories, `SCENE_SYSTEM_EXPLAINER` for the YSK explainer). `/api/scenes`
    then calls `buildScenesFromBeats` to turn the beats into contiguous scenes
    with EXACT timing from the timestamps.
+4. **Generate images** (`/api/projects/[id]/images/generate` → Gemini, optional).
+   `src/lib/gemini.ts` calls Nano Banana with a prompt (+ any reference images as
+   `inlineData` for consistency) and stores the result in the `images` table
+   (`scope` `ref`|`scene`). Driven by the Automate stepper; needs `GEMINI_API_KEY`.
+   Motion/clips are still user-supplied — no video API.
 
-So Claude is called in steps 1 and 3; ElevenLabs only in step 2; the scene
-geometry/timing is computed locally.
+So Claude is called in steps 1 and 3; ElevenLabs only in step 2; Gemini only in
+step 4 (image gen); the scene geometry/timing is computed locally.
 
 ## Scene model (important — read before touching scenes)
 
@@ -81,12 +89,19 @@ geometry/timing is computed locally.
 - `src/lib/recipe.ts` — `buildSceneRecipes`: per-scene production steps (pure).
 - `src/lib/anthropic.ts` — `generateStory`, `generateSceneBeats` (forced tool use + prompt caching).
 - `src/lib/elevenlabs.ts` — `listVoices` (v2), `ttsWithTimestamps`.
+- `src/lib/gemini.ts` — `generateImage` (Nano Banana via `generateContent`): text
+  prompt + optional reference images → one still. `GEMINI_IMAGE_MODEL` in
+  `src/server/env.ts` picks the model (default `gemini-3-pro-image`). The **only**
+  place the app generates media; gated behind `GEMINI_API_KEY`.
 - `src/lib/storage.ts` — **client** async wrapper over `/api/projects` (+ a
-  one-time `migrateLegacy` from the old browser localStorage/IndexedDB).
+  one-time `migrateLegacy` from the old browser localStorage/IndexedDB); also the
+  image helpers (`generateImage`, `imageUrl`, `listImages`, `deleteImage`).
 - `src/server/db.ts` — **server** SQLite (better-sqlite3) at `.data/storyflow.db`:
-  `projects` (Project JSON) + `audio` (mp3 BLOB) + `clips` (per-scene video BLOB).
-- `src/app/api/projects/*` — project CRUD, `[id]/audio` GET/PUT, and
-  `[id]/clips` (list) + `[id]/clips/[index]` GET/PUT/DELETE.
+  `projects` (Project JSON) + `audio` (mp3 BLOB) + `clips` (per-scene video BLOB)
+  + `images` (generated stills BLOB, keyed by `scope`/`key`).
+- `src/app/api/projects/*` — project CRUD, `[id]/audio` GET/PUT,
+  `[id]/clips` (list) + `[id]/clips/[index]` GET/PUT/DELETE, and `[id]/images`
+  (list) + `[id]/images/generate` (POST) + `[id]/images/[scope]/[key]` GET/DELETE.
 - `src/components/Automate.tsx` — the **Automate stepper** shown under the script:
   a guided, ordered walk through the pipeline. Steps are tagged `auto` (the app
   does it: voiceover, scenes) or `you` (a guided handoff — the app shows the

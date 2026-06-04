@@ -116,6 +116,68 @@ export function clipUrl(
   return `/api/projects/${projectId}/clips/${sceneIndex}${version ? `?v=${version}` : ""}`;
 }
 
+/* -------------------------- generated images ----------------------------- */
+
+export type ImageScope = "ref" | "scene";
+
+/** Existing generated-image keys for a project, as `${scope}:${key}` strings. */
+export async function listImages(projectId: string): Promise<string[]> {
+  try {
+    const res = await fetch(`/api/projects/${projectId}/images`);
+    if (!res.ok) return [];
+    const data = (await res.json()) as {
+      images?: { scope: string; key: string }[];
+    };
+    return (data.images ?? []).map((i) => `${i.scope}:${i.key}`);
+  } catch {
+    return [];
+  }
+}
+
+/** Generate (and store) an image via Nano Banana. Throws with the server message. */
+export async function generateImage(
+  projectId: string,
+  args: {
+    scope: ImageScope;
+    key: string;
+    prompt: string;
+    referenceKeys?: string[];
+    aspectRatio?: string;
+  },
+): Promise<void> {
+  const res = await fetch(`/api/projects/${projectId}/images/generate`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(args),
+  });
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    throw new Error(data.error ?? "Image generation failed.");
+  }
+}
+
+export async function deleteImage(
+  projectId: string,
+  scope: ImageScope,
+  key: string,
+): Promise<void> {
+  await fetch(
+    `/api/projects/${projectId}/images/${scope}/${encodeURIComponent(key)}`,
+    { method: "DELETE" },
+  );
+}
+
+export function imageUrl(
+  projectId: string,
+  scope: ImageScope,
+  key: string,
+  version?: number,
+): string {
+  return `/api/projects/${projectId}/images/${scope}/${encodeURIComponent(key)}${
+    version ? `?v=${version}` : ""
+  }`;
+}
+
 /* ----------------------- one-time legacy migration ----------------------- */
 
 const LEGACY_KEY = "storyflow.projects.v1";

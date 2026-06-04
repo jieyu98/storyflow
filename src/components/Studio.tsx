@@ -8,10 +8,14 @@ import {
   audioUrl,
   base64ToBytes,
   deleteAllClips,
+  deleteImage,
+  generateImage,
   getProject,
   listClips,
+  listImages,
   saveAudio,
   upsertProject,
+  type ImageScope,
 } from "@/lib/storage";
 import { formatClock } from "@/lib/text";
 import { type Project, type Scene, type TtsModelId } from "@/lib/types";
@@ -37,6 +41,8 @@ export default function Studio({ projectId }: { projectId: string }) {
   const [audioSrc, setAudioSrc] = useState<string | null>(null);
   const [clips, setClips] = useState<Set<number>>(new Set());
   const [clipVersion, setClipVersion] = useState(0);
+  const [images, setImages] = useState<Set<string>>(new Set());
+  const [imageVersion, setImageVersion] = useState(0);
   const [seekReq, setSeekReq] = useState<{ t: number; n: number } | null>(null);
   const previewRef = useRef<HTMLElement>(null);
 
@@ -65,6 +71,9 @@ export default function Studio({ projectId }: { projectId: string }) {
       if (p.hasAudio) setAudioSrc(audioUrl(projectId, p.updatedAt));
       void listClips(projectId).then((list) => {
         if (!cancelled) setClips(new Set(list.map((c) => c.index)));
+      });
+      void listImages(projectId).then((keys) => {
+        if (!cancelled) setImages(new Set(keys));
       });
     });
     return () => {
@@ -226,6 +235,30 @@ export default function Studio({ projectId }: { projectId: string }) {
     });
   }
 
+  // Generate an image via Nano Banana; throws on failure so the caller can show
+  // a per-row message. referenceKeys are bible-entity ids whose ref image (if
+  // generated) is passed to the model for consistency.
+  async function handleGenerateImage(
+    scope: ImageScope,
+    key: string,
+    prompt: string,
+    referenceKeys?: string[],
+  ) {
+    await generateImage(projectId, { scope, key, prompt, referenceKeys });
+    setImages((prev) => new Set(prev).add(`${scope}:${key}`));
+    setImageVersion((v) => v + 1);
+  }
+
+  async function handleDeleteImage(scope: ImageScope, key: string) {
+    await deleteImage(projectId, scope, key);
+    setImages((prev) => {
+      const next = new Set(prev);
+      next.delete(`${scope}:${key}`);
+      return next;
+    });
+    setImageVersion((v) => v + 1);
+  }
+
   /* --------------------------------- render -------------------------------- */
   if (project === undefined) {
     return (
@@ -309,6 +342,10 @@ export default function Studio({ projectId }: { projectId: string }) {
             onPreviewScene={handlePreviewScene}
             refDoneIds={project.refDoneIds ?? []}
             onToggleRef={handleToggleRef}
+            images={images}
+            imageVersion={imageVersion}
+            onGenerateImage={handleGenerateImage}
+            onDeleteImage={handleDeleteImage}
           />
         )}
 

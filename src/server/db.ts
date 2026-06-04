@@ -37,6 +37,15 @@ function db(): Database.Database {
       updated_at  INTEGER,
       PRIMARY KEY (project_id, scene_index)
     );
+    CREATE TABLE IF NOT EXISTS images (
+      project_id TEXT,
+      scope      TEXT,           -- 'ref' (bible entity) | 'scene' (starting frame)
+      key        TEXT,           -- entity id, or scene index as text
+      mime       TEXT,
+      data       BLOB NOT NULL,
+      updated_at INTEGER,
+      PRIMARY KEY (project_id, scope, key)
+    );
   `);
   globalForDb.__storyflowDb = conn;
   return conn;
@@ -79,6 +88,7 @@ export function deleteProject(id: string): void {
   conn.prepare("DELETE FROM projects WHERE id = ?").run(id);
   conn.prepare("DELETE FROM audio WHERE project_id = ?").run(id);
   conn.prepare("DELETE FROM clips WHERE project_id = ?").run(id);
+  conn.prepare("DELETE FROM images WHERE project_id = ?").run(id);
 }
 
 export function saveAudio(id: string, mp3: Buffer): void {
@@ -151,4 +161,61 @@ export function listClipIndexes(
     )
     .all(projectId) as { scene_index: number; mime: string }[];
   return rows.map((r) => ({ index: r.scene_index, mime: r.mime }));
+}
+
+/* ------------------------------- images ---------------------------------- */
+
+export function saveImage(
+  projectId: string,
+  scope: string,
+  key: string,
+  mime: string,
+  data: Buffer,
+): void {
+  db()
+    .prepare(
+      `INSERT INTO images (project_id, scope, key, mime, data, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?)
+       ON CONFLICT(project_id, scope, key) DO UPDATE SET
+         mime = excluded.mime,
+         data = excluded.data,
+         updated_at = excluded.updated_at`,
+    )
+    .run(projectId, scope, key, mime, data, Date.now());
+}
+
+export function getImage(
+  projectId: string,
+  scope: string,
+  key: string,
+): { mime: string; data: Buffer } | null {
+  const row = db()
+    .prepare(
+      "SELECT mime, data FROM images WHERE project_id = ? AND scope = ? AND key = ?",
+    )
+    .get(projectId, scope, key) as { mime: string; data: Buffer } | undefined;
+  return row ?? null;
+}
+
+export function deleteImage(
+  projectId: string,
+  scope: string,
+  key: string,
+): void {
+  db()
+    .prepare(
+      "DELETE FROM images WHERE project_id = ? AND scope = ? AND key = ?",
+    )
+    .run(projectId, scope, key);
+}
+
+export function listImageKeys(
+  projectId: string,
+): { scope: string; key: string }[] {
+  const rows = db()
+    .prepare(
+      "SELECT scope, key FROM images WHERE project_id = ? ORDER BY scope, key",
+    )
+    .all(projectId) as { scope: string; key: string }[];
+  return rows;
 }
