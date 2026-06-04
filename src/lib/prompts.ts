@@ -115,14 +115,17 @@ For each beat also write:
 
 name — a 2–4 word beat name.
 
+shotType — a 1–3 word shot label (wide establishing, macro insert, top-down, low-angle, POV, cutaway diagram, etc.). Vary it across beats; never repeat the same shotType back-to-back.
+
 imagePrompt — the STARTING FRAME (a single still image), in vivid natural language (full sentences for Nano Banana / GPT-Image, NOT comma-separated tags):
 - Compose for a 9:16 VERTICAL frame. State the shot size and camera angle (e.g. wide establishing, top-down flat-lay, low-angle medium, EXTREME MACRO close-up), a lens feel (shallow depth of field, etc.), subject placement, and the lighting / mood.
 - EVERY BEAT IS ONE OF TWO MODES — set visualMode and write the image accordingly:
   • visualMode "live" — the beat shows something REAL you could film: an object, an action, a place (the squeeze, the mug, the leaf). Describe that real scene — the actual object/action, the process, the mechanism made visible. Macro insert shots are a strong tool. Where the fact corrects a mistake, contrast THE COMMON MISTAKE with THE RIGHT WAY across beats (before/after, wrong/right).
-  • visualMode "concept" — the beat explains something INVISIBLE (chemistry, a force, time, "what's happening inside"). Design a clear visualization of the idea: a cutaway / cross-section, particles or color/flow moving, a labeled side-by-side comparison, an icon-and-arrow explainer. Keep any on-screen text to a few short words at most (image tools render long labels poorly).
+  • visualMode "concept" — the beat explains something INVISIBLE (chemistry, a force, time, "what's happening inside"). Design a clear visualization of the idea, and ROTATE the representation across concept beats so no two look alike: a cutaway / cross-section, drifting particles or flowing color, a physical analogy or metaphor object, a simple data-viz (a scale, meter, or bar), a before/after pair, or an icon-and-arrow explainer. Convey the meaning through the VISUAL itself — size, scale, color, position, arrows — not through baked-in words.
 - The two modes are RENDERED IN DIFFERENT LOOKS automatically (live shots cinematic, concept shots as clean graphics), so DESCRIBE ONLY WHAT IS SHOWN AND THE COMPOSITION — do NOT specify the medium, photoreal-ness, "flat graphic", "3D", render engine, or quality tags. Never carry meaning with lighting or "mood" alone — if the viewer can't SEE the idea in the frame, it isn't there. Don't re-show the same object with only a lighting tweak.
+- NO TEXT BAKED INTO THE IMAGE — image tools garble words and numbers. Never write labels, captions, or figures into the imagePrompt. If a beat needs a word or number on screen, put it in onScreenText (short) to overlay cleanly in the editor, and make the image read even without it.
 - The OBJECT, ACTION, or DIAGRAM is the hero — most beats should have NO person in them at all. If a hand or figure is needed to demonstrate, keep it a neutral, anonymous demonstrator (hands, a partial figure); never invent a narrator or talking head, and never put a face in a beat that doesn't need one.
-- NO REPETITION — this is the most important rule. Every beat must look clearly DIFFERENT from its neighbors at a glance on a phone. Never show the same subject or composition in two beats running, and do not lean on any single subject across the video. If you have already shown something, find a genuinely new representation — a cutaway, a diagram, a different object, a radically different scale or angle — rather than repeating it. Subtle differences (slightly darker liquid, warmer light, a tiny change of angle) do NOT count as variety.
+- NO REPETITION — this is the most important rule. Every beat must look clearly DIFFERENT from its neighbors at a glance on a phone. Never repeat the same subject, composition, or shotType in two beats running, and do not lean on any single subject across the video. If you have already shown something, find a genuinely new representation — a cutaway, a diagram, a different object, a radically different scale or angle — rather than repeating it. Subtle differences (slightly darker liquid, warmer light, a tiny change of angle) do NOT count as variety.
 - Keep the key subject in the upper-to-middle third and leave the dead-center-bottom clear — captions and platform UI sit there.
 - CONSISTENCY: when a recurring object or location from the bible appears, refer to it by its bible NAME and weave in its exact fixed description verbatim. On its FIRST appearance just establish it; from the SECOND appearance onward, add "the same [Name], identical to the earlier scene" so it looks identical every time. (Diagrams and abstract explanatory beats need not match a bible entry.)
 - Do NOT mention art style, medium, render engine, or quality tags — a style block is appended automatically afterward.
@@ -135,6 +138,8 @@ animationPrompt — how the still MOVES over its clip (for an image-to-video too
 characterIds — the ids of bible characters visible in the beat (often none for explainer beats).
 
 locationIds — the ids of bible locations / key objects visible in the beat, so the same reference image can be reused across beats for visual consistency. List every bible location or object that actually appears.
+
+onScreenText — OPTIONAL, usually empty. Any short word/label/number that must appear on screen for this beat (e.g. "BITTER", "$45k"). It is overlaid as a caption in the editor, NOT drawn by the image model — so keep it out of imagePrompt.
 
 Keep continuity: consecutive beats should read like the same clean world and the same objects. Return everything through the emit_scenes tool, one entry per beat, in order.`;
 
@@ -158,6 +163,16 @@ export const SCENE_TOOL = {
             name: {
               type: "string",
               description: "2-4 word beat name.",
+            },
+            shotType: {
+              type: "string",
+              description:
+                "1-3 word shot label (wide, macro insert, top-down, low-angle, POV, cutaway diagram). Vary across beats; never repeat back-to-back.",
+            },
+            onScreenText: {
+              type: "string",
+              description:
+                "OPTIONAL short caption/label/number to overlay in the editor (e.g. \"BITTER\"). Usually empty. NEVER baked into imagePrompt.",
             },
             visualMode: {
               type: "string",

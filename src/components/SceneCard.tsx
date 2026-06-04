@@ -50,12 +50,13 @@ export default function SceneCard({
           <span className="chip">{formatClock(scene.span)} on screen</span>
           {scene.clamped && (
             <span className="chip text-ember-300">
-              over {scene.assignedDuration}s — needs a longer max
+              over {scene.assignedDuration}s — split or extend
             </span>
           )}
           {scene.visualMode === "concept" && (
             <span className="chip text-twilight-300">graphic</span>
           )}
+          {scene.shotType && <span className="chip">{scene.shotType}</span>}
           <button
             type="button"
             onClick={() => onPreview(scene)}
@@ -107,6 +108,19 @@ export default function SceneCard({
               text={scene.animationPrompt ?? ""}
               accent="twilight"
             />
+            {scene.onScreenText && (
+              <div className="rounded-xl border border-[var(--line)] bg-ink-950/50 p-3">
+                <div className="mb-2 flex items-center justify-between gap-2">
+                  <span className="text-xs font-semibold text-mint-400">
+                    On-screen text — overlay in your editor
+                  </span>
+                  <CopyButton text={scene.onScreenText} />
+                </div>
+                <p className="whitespace-pre-wrap font-mono text-xs leading-relaxed text-muted">
+                  {scene.onScreenText}
+                </p>
+              </div>
+            )}
           </div>
         ) : (
           <p className="mt-4 text-xs text-faint">

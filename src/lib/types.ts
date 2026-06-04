@@ -64,6 +64,10 @@ export type Scene = {
   locationIds?: string[];
   /** "live" = a real filmable object/action; "concept" = a visualization of an invisible idea. */
   visualMode?: "live" | "concept";
+  /** Short shot label (e.g. "macro insert", "wide establishing"). */
+  shotType?: string;
+  /** Optional caption/label to overlay in the editor — never baked into the image. */
+  onScreenText?: string;
 };
 
 export type Project = {
