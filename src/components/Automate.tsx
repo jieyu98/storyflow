@@ -51,6 +51,7 @@ export default function Automate({
   imageVersion,
   onGenerateImage,
   onDeleteImage,
+  onGenerateClip,
 }: {
   hasAudio: boolean;
   scriptDirty: boolean;
@@ -80,6 +81,12 @@ export default function Automate({
     referenceKeys?: string[],
   ) => Promise<void>;
   onDeleteImage: (scope: ImageScope, key: string) => Promise<void>;
+  onGenerateClip: (
+    sceneIndex: number,
+    prompt: string,
+    duration?: number,
+    aspectRatio?: string,
+  ) => Promise<void>;
 }) {
   const entities = useMemo(
     () => [
@@ -365,6 +372,7 @@ export default function Automate({
         imageVersion={imageVersion}
         onGenerateImage={onGenerateImage}
         onDeleteImage={onDeleteImage}
+        onGenerateClip={onGenerateClip}
       />
     );
   }

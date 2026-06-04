@@ -25,6 +25,7 @@ export default function SceneList({
   imageVersion,
   onGenerateImage,
   onDeleteImage,
+  onGenerateClip,
 }: {
   scenes: Scene[];
   styleId: string;
@@ -46,6 +47,12 @@ export default function SceneList({
     referenceKeys?: string[],
   ) => Promise<void>;
   onDeleteImage?: (scope: ImageScope, key: string) => Promise<void>;
+  onGenerateClip?: (
+    sceneIndex: number,
+    prompt: string,
+    duration?: number,
+    aspectRatio?: string,
+  ) => Promise<void>;
 }) {
   if (scenes.length === 0) return null;
 
@@ -104,6 +111,7 @@ export default function SceneList({
           imageVersion={imageVersion}
           onGenerateImage={onGenerateImage}
           onDeleteImage={onDeleteImage}
+          onGenerateClip={onGenerateClip}
         />
       ))}
     </div>

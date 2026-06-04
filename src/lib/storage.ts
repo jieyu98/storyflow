@@ -108,6 +108,30 @@ export async function deleteAllClips(projectId: string): Promise<void> {
   await fetch(`/api/projects/${projectId}/clips`, { method: "DELETE" });
 }
 
+/**
+ * Generate this scene's clip with Grok (image-to-video), animating the scene's
+ * generated starting frame. Long-running (async on xAI's side); resolves once
+ * the mp4 is downloaded and stored as the clip. Throws with the server message.
+ */
+export async function generateClip(
+  projectId: string,
+  sceneIndex: number,
+  args: { prompt: string; duration?: number; aspectRatio?: string },
+): Promise<void> {
+  const res = await fetch(
+    `/api/projects/${projectId}/clips/${sceneIndex}/generate`,
+    {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(args),
+    },
+  );
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    throw new Error(data.error ?? "Clip generation failed.");
+  }
+}
+
 export function clipUrl(
   projectId: string,
   sceneIndex: number,

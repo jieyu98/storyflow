@@ -23,6 +23,7 @@ export default function SceneCard({
   imageVersion = 0,
   onGenerateImage,
   onDeleteImage,
+  onGenerateClip,
 }: {
   scene: Scene;
   styleId: string;
@@ -41,6 +42,12 @@ export default function SceneCard({
     referenceKeys?: string[],
   ) => Promise<void>;
   onDeleteImage?: (scope: ImageScope, key: string) => Promise<void>;
+  onGenerateClip?: (
+    sceneIndex: number,
+    prompt: string,
+    duration?: number,
+    aspectRatio?: string,
+  ) => Promise<void>;
 }) {
   const hasPrompts = Boolean(scene.imagePrompt);
   const composedImage = composeImagePrompt(scene.imagePrompt, styleId);
@@ -65,6 +72,27 @@ export default function SceneCard({
       setImgErr(e instanceof Error ? e.message : "Generation failed.");
     } finally {
       setBusyImg(false);
+    }
+  }
+
+  const [busyClip, setBusyClip] = useState(false);
+  const [clipErr, setClipErr] = useState<string | null>(null);
+
+  async function generateClip() {
+    if (!onGenerateClip) return;
+    setBusyClip(true);
+    setClipErr(null);
+    try {
+      await onGenerateClip(
+        scene.index,
+        scene.animationPrompt ?? composedImage,
+        scene.assignedDuration,
+        "9:16",
+      );
+    } catch (e) {
+      setClipErr(e instanceof Error ? e.message : "Clip generation failed.");
+    } finally {
+      setBusyClip(false);
     }
   }
 
@@ -218,6 +246,49 @@ export default function SceneCard({
           <p className="mt-4 text-xs text-faint">
             Prompts not written yet — hit “Write scene prompts”.
           </p>
+        )}
+
+        {onGenerateClip && (
+          <div className="mt-4 rounded-xl border border-mint-400/25 bg-mint-400/5 p-3">
+            <div className="flex items-center justify-between gap-2">
+              <span className="flex items-center gap-1.5 text-xs font-semibold text-mint-400">
+                <MotionIcon width={14} height={14} />
+                Animate into a clip (Grok)
+              </span>
+              <button
+                type="button"
+                onClick={generateClip}
+                disabled={busyClip || !hasImage}
+                className="btn btn-ember !px-3 !py-1.5 !text-xs"
+                title={
+                  hasImage
+                    ? "Image → video from the starting frame"
+                    : "Generate the starting frame first"
+                }
+              >
+                {busyClip ? (
+                  <>
+                    <Spinner width={13} height={13} /> Animating…
+                  </>
+                ) : hasClip ? (
+                  "Regenerate clip"
+                ) : (
+                  "Generate clip"
+                )}
+              </button>
+            </div>
+            <p className="mt-1 text-[0.68rem] text-faint">
+              {hasImage
+                ? `Image → video from the starting frame, ${scene.assignedDuration}s, using the animation prompt. Takes ~20s+.`
+                : "Generate the starting frame above first, then animate it here."}
+            </p>
+            {busyClip && (
+              <p className="mt-1 text-[0.68rem] text-mint-400">
+                Generating — keep this tab open; it can take a minute.
+              </p>
+            )}
+            {clipErr && <p className="mt-1 text-xs text-ember-300">{clipErr}</p>}
+          </div>
         )}
 
         <ClipDrop

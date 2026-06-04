@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { ElevenLabsError } from "./elevenlabs";
 import { GeminiError } from "./gemini";
+import { GrokError } from "./grok";
 
 /** Map server/library errors to a friendly JSON response. */
 export function apiError(err: unknown): NextResponse {
@@ -21,6 +22,18 @@ export function apiError(err: unknown): NextResponse {
         : err.status === 429
           ? `Gemini quota or rate limit hit — premium models like gemini-3-pro-image often have no free-tier quota. Detail: ${err.message}`
           : `Gemini error: ${err.message}`;
+    return NextResponse.json({ error: msg }, { status: err.status });
+  }
+
+  if (err instanceof GrokError) {
+    const msg =
+      err.status === 401 || err.status === 403
+        ? `Grok rejected the request (check XAI_API_KEY / model access): ${err.message}`
+        : err.status === 429
+          ? `Grok rate-limited or out of quota. Detail: ${err.message}`
+          : err.status === 504
+            ? "Grok video timed out — the job ran too long. Try again or a shorter clip."
+            : `Grok error: ${err.message}`;
     return NextResponse.json({ error: msg }, { status: err.status });
   }
 

@@ -9,6 +9,7 @@ import {
   base64ToBytes,
   deleteAllClips,
   deleteImage,
+  generateClip,
   generateImage,
   getProject,
   listClips,
@@ -259,6 +260,19 @@ export default function Studio({ projectId }: { projectId: string }) {
     setImageVersion((v) => v + 1);
   }
 
+  // Animate a scene's starting frame into its clip with Grok (long-running).
+  // Throws on failure so the caller can show a per-scene message.
+  async function handleGenerateClip(
+    sceneIndex: number,
+    prompt: string,
+    duration?: number,
+    aspectRatio?: string,
+  ) {
+    await generateClip(projectId, sceneIndex, { prompt, duration, aspectRatio });
+    setClips((prev) => new Set(prev).add(sceneIndex));
+    setClipVersion((v) => v + 1);
+  }
+
   /* --------------------------------- render -------------------------------- */
   if (project === undefined) {
     return (
@@ -346,6 +360,7 @@ export default function Studio({ projectId }: { projectId: string }) {
             imageVersion={imageVersion}
             onGenerateImage={handleGenerateImage}
             onDeleteImage={handleDeleteImage}
+            onGenerateClip={handleGenerateClip}
           />
         )}
 
@@ -481,6 +496,7 @@ export default function Studio({ projectId }: { projectId: string }) {
             imageVersion={imageVersion}
             onGenerateImage={handleGenerateImage}
             onDeleteImage={handleDeleteImage}
+            onGenerateClip={handleGenerateClip}
           />
         )}
       </div>

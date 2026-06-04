@@ -6,11 +6,11 @@ with ElevenLabs (with word-level timestamps), cuts it into timed scenes, and
 hands you a **starting-frame image prompt** and an **animation prompt** for each
 scene — ready to paste into your own image and image-to-video tools.
 
-StoryFlow produces text + the voiceover audio, and can **generate the still
-images in-app** with Gemini ("Nano Banana") — optional, behind your own
-`GEMINI_API_KEY`. It does **not** generate **video**: you make the motion clips in
-your own image-to-video tool (Grok / Kling / Veo) and drop them in. The
-prompt-copy manual workflow still works with no Gemini key.
+StoryFlow produces text + the voiceover audio, and can optionally **generate the
+visuals in-app**: still images with Gemini ("Nano Banana", `GEMINI_API_KEY`) and
+motion clips with Grok image-to-video ("Grok Imagine", `XAI_API_KEY`). Both are
+optional — with no keys, you copy the prompts into your own image tool and upload
+your own clips, and the whole flow still works.
 
 ## How it works
 
@@ -44,12 +44,12 @@ prompt-copy manual workflow still works with no Gemini key.
    StoryFlow still doesn't export video.)
 
 The **Automate** panel under the script ties this together as a guided stepper:
-**voiceover** → **scenes** → **reference images** → **scene 1, 2, …**. With a
-`GEMINI_API_KEY`, the reference images and each scene's 9:16 starting frame can be
-**generated in-app** (Nano Banana) right from the step — scene frames pass that
-scene's reference images through for consistency. Without a key, each step still
-shows the exact prompt to copy into your own tool. You always supply the motion
-clips yourself.
+**voiceover** → **scenes** → **reference images** → **scene 1, 2, …**. With the
+optional keys, each step can run in-app: reference images and 9:16 starting frames
+via Gemini (scene frames pass their reference images through for consistency), and
+each scene's clip via Grok image-to-video off that starting frame. Without keys,
+every step still shows the exact prompt to copy into your own tools and lets you
+upload your own clips.
 
 Projects are saved in a local **SQLite** database (`.data/storyflow.db`, created
 on first run) via the app's own API — the whole project as JSON, the mp3 as a
@@ -71,6 +71,8 @@ Required env vars (see `.env.example`):
 - `ELEVENLABS_API_KEY` — voice list + timestamped voiceover.
 - `GEMINI_API_KEY` — *optional*; in-app still generation ("Nano Banana"). Without
   it, copy the prompts into your own image tool instead.
+- `XAI_API_KEY` — *optional*; in-app clip generation (Grok image-to-video). Without
+  it, make clips in your own tool and upload them.
 
 ## Stack
 

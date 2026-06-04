@@ -22,6 +22,10 @@ export const serverEnv = {
   get GEMINI_API_KEY(): string {
     return required("GEMINI_API_KEY");
   },
+  /** xAI key for Grok image-to-video generation ("Grok Imagine"). */
+  get XAI_API_KEY(): string {
+    return required("XAI_API_KEY");
+  },
 };
 
 /** Model used for story + scene-prompt generation. */
@@ -34,3 +38,6 @@ export const ANTHROPIC_MODEL = "claude-sonnet-4-6";
  *   "gemini-2.5-flash-image" — original Nano Banana.
  */
 export const GEMINI_IMAGE_MODEL = "gemini-3-pro-image";
+
+/** Grok image-to-video model ("Grok Imagine"). */
+export const GROK_VIDEO_MODEL = "grok-imagine-video";

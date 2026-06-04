@@ -6,13 +6,17 @@ A Next.js 16 / React 19 / Tailwind v4 app that turns pasted Reddit text into the
 assets for a short-form vertical (9:16) video: a narration script, an ElevenLabs
 voiceover, and per-scene image + animation prompts.
 
-**Product boundary:** the app's core output is **text + the voiceover mp3**, and
-it can now **generate still images in-app** via Gemini ("Nano Banana") — gated
-behind `GEMINI_API_KEY` and an explicit user action (the Automate stepper). It
-still does **not** generate **video / motion**: clips are made by the user in
-their own image-to-video tool (Grok / Kling / Veo) and dropped in. The prompt-copy
-manual workflow remains a first-class path (works with no Gemini key). **Don't add
-in-app video generation, or call any new media API, without asking.**
+**Product boundary:** the app's core output is **text + the voiceover mp3**. It
+can now also generate media **in-app**, each gated behind its own key and an
+explicit user action (the Automate stepper / scene cards):
+- **Still images** via Gemini ("Nano Banana") — `GEMINI_API_KEY`.
+- **Video clips** via Grok image-to-video ("Grok Imagine") — `XAI_API_KEY`:
+  animates a scene's generated starting frame into its clip.
+
+The **manual workflow stays first-class**: with no keys, you copy the prompts into
+your own image tool and upload your own clips, and everything still works.
+**Don't wire up a new external media API, or expand what's generated, without
+asking.**
 
 ## Pipeline (which step calls what)
 
@@ -35,10 +39,14 @@ in-app video generation, or call any new media API, without asking.**
    `src/lib/gemini.ts` calls Nano Banana with a prompt (+ any reference images as
    `inlineData` for consistency) and stores the result in the `images` table
    (`scope` `ref`|`scene`). Driven by the Automate stepper; needs `GEMINI_API_KEY`.
-   Motion/clips are still user-supplied — no video API.
+5. **Generate clips** (`/api/projects/[id]/clips/[index]/generate` → Grok,
+   optional). `src/lib/grok.ts` animates the scene's generated starting frame
+   (inlined as a base64 data URI) with its animation prompt via the **async** xAI
+   video API (submit → poll → download the mp4), storing it in the `clips` table.
+   Needs `XAI_API_KEY`. Clips can also still be uploaded manually.
 
-So Claude is called in steps 1 and 3; ElevenLabs only in step 2; Gemini only in
-step 4 (image gen); the scene geometry/timing is computed locally.
+So Claude is called in steps 1 and 3; ElevenLabs only in step 2; Gemini in step 4
+(images); Grok in step 5 (video); the scene geometry/timing is computed locally.
 
 ## Scene model (important — read before touching scenes)
 
@@ -91,17 +99,21 @@ step 4 (image gen); the scene geometry/timing is computed locally.
 - `src/lib/elevenlabs.ts` — `listVoices` (v2), `ttsWithTimestamps`.
 - `src/lib/gemini.ts` — `generateImage` (Nano Banana via `generateContent`): text
   prompt + optional reference images → one still. `GEMINI_IMAGE_MODEL` in
-  `src/server/env.ts` picks the model (default `gemini-3-pro-image`). The **only**
-  place the app generates media; gated behind `GEMINI_API_KEY`.
+  `src/server/env.ts` picks the model (default `gemini-3-pro-image`). The only
+  place the app generates **stills**; gated behind `GEMINI_API_KEY`. (Video lives
+  in `src/lib/grok.ts`, listed below.)
 - `src/lib/storage.ts` — **client** async wrapper over `/api/projects` (+ a
   one-time `migrateLegacy` from the old browser localStorage/IndexedDB); also the
-  image helpers (`generateImage`, `imageUrl`, `listImages`, `deleteImage`).
+  image helpers (`generateImage`, `imageUrl`, `listImages`, `deleteImage`) and
+  `generateClip` (Grok image-to-video → the scene's clip).
 - `src/server/db.ts` — **server** SQLite (better-sqlite3) at `.data/storyflow.db`:
-  `projects` (Project JSON) + `audio` (mp3 BLOB) + `clips` (per-scene video BLOB)
-  + `images` (generated stills BLOB, keyed by `scope`/`key`).
+  `projects` (Project JSON) + `audio` (mp3 BLOB) + `clips` (per-scene video BLOB,
+  uploaded or Grok-generated) + `images` (generated stills BLOB, keyed by
+  `scope`/`key`).
 - `src/app/api/projects/*` — project CRUD, `[id]/audio` GET/PUT,
-  `[id]/clips` (list) + `[id]/clips/[index]` GET/PUT/DELETE, and `[id]/images`
-  (list) + `[id]/images/generate` (POST) + `[id]/images/[scope]/[key]` GET/DELETE.
+  `[id]/clips` (list) + `[id]/clips/[index]` GET/PUT/DELETE +
+  `[id]/clips/[index]/generate` (POST → Grok), and `[id]/images` (list) +
+  `[id]/images/generate` (POST) + `[id]/images/[scope]/[key]` GET/DELETE.
 - `src/components/Automate.tsx` — the **Automate stepper** shown under the script:
   a guided, ordered walk through the pipeline (voiceover → scenes → reference
   images → per scene). The **reference-images** step generates each bible
@@ -109,10 +121,15 @@ step 4 (image gen); the scene geometry/timing is computed locally.
   to do it manually). Per-scene steps reuse `SceneCard`, which now also has a
   **Generate** button for the scene's 9:16 starting frame — it passes that scene's
   `characterIds`/`locationIds` reference images (the ones already generated) to
-  Gemini for cross-shot consistency. Clips (motion) are still user-supplied.
+  Gemini for cross-shot consistency. Each scene can then **generate its clip** via
+  Grok (image-to-video off the starting frame) or take an uploaded clip.
 - `src/components/SceneCard.tsx` — per-scene card: prompts, recipe, optional
-  in-app starting-frame generation (when the `onGenerateImage` props are passed),
-  and the clip drop. Used by both the stepper and `SceneList`.
+  in-app starting-frame generation (`onGenerateImage`) and clip generation
+  (`onGenerateClip` → Grok, enabled once the frame exists), and the clip drop.
+  Used by both the stepper and `SceneList`.
+- `src/lib/grok.ts` — `generateVideoAndWait`: submit + poll the async xAI video
+  API, return the finished mp4 url. `GROK_VIDEO_MODEL` in `src/server/env.ts`;
+  gated behind `XAI_API_KEY`. The only place the app generates video.
 - `src/components/ClipDrop.tsx` — per-scene clip upload (drag/drop → `/clips`).
 - `src/components/PreviewPlayer.tsx` + `src/remotion/PreviewComposition.tsx` — the
   9:16 preview. It is a **Remotion `<Player>`** (a player, NOT a renderer — no
