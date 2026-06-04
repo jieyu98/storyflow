@@ -1,8 +1,8 @@
 // Shared domain types for StoryFlow.
 
-/** Default cap on a single clip's length (seconds). ~6s fits Grok's clip length
- *  and keeps a livelier cut rhythm; a single still also drifts past this. */
-export const DEFAULT_MAX_CLIP_SECONDS = 6;
+/** Hard ceiling on a single clip's length (seconds). The AI chooses each beat's
+ *  length from its content; this is the absolute maximum it may never exceed. */
+export const MAX_CLIP_SECONDS = 15;
 
 /** A single spoken word with its time span (seconds) on the voiceover timeline. */
 export type Word = {
@@ -47,7 +47,7 @@ export type Scene = {
   tSpokenEnd: number;
   /** Spoken span = tSpokenEnd - tStart. */
   span: number;
-  /** Integer clip length in seconds = min(ceil(span), maxClipSeconds). */
+  /** Integer clip length in seconds = min(ceil(span), MAX_CLIP_SECONDS). */
   assignedDuration: number;
   text: string;
   /** Short 2-4 word beat name from the AI. */
@@ -60,6 +60,10 @@ export type Scene = {
   animationPrompt?: string;
   /** Ids of bible characters that appear in this scene. */
   characterIds?: string[];
+  /** Ids of bible locations / key objects in this scene (for reference-image reuse). */
+  locationIds?: string[];
+  /** "live" = a real filmable object/action; "concept" = a visualization of an invisible idea. */
+  visualMode?: "live" | "concept";
 };
 
 export type Project = {
@@ -76,6 +80,8 @@ export type Project = {
   coreTurn?: string;
   /** Art-style preset id (see src/lib/styles.ts). */
   stylePresetId: string;
+  /** Art-style for "concept" scenes (explainer diagrams); falls back to stylePresetId. */
+  conceptStylePresetId?: string;
   voiceId?: string;
   voiceName?: string;
   modelId?: string;
@@ -86,8 +92,6 @@ export type Project = {
   audioDuration?: number;
   /** Whether a voiceover blob exists in IndexedDB for this project. */
   hasAudio?: boolean;
-  /** Max clip length (seconds) the AI must keep each beat within. */
-  maxClipSeconds?: number;
   scenes?: Scene[];
 };
 

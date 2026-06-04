@@ -14,12 +14,7 @@ import {
   upsertProject,
 } from "@/lib/storage";
 import { formatClock } from "@/lib/text";
-import {
-  DEFAULT_MAX_CLIP_SECONDS,
-  type Project,
-  type Scene,
-  type TtsModelId,
-} from "@/lib/types";
+import { type Project, type Scene, type TtsModelId } from "@/lib/types";
 import ScriptCard from "./ScriptCard";
 import VisualBibleView from "./VisualBibleView";
 import VoicePicker from "./VoicePicker";
@@ -37,7 +32,6 @@ export default function Studio({ projectId }: { projectId: string }) {
   const [voiceId, setVoiceId] = useState<string | undefined>();
   const [voiceName, setVoiceName] = useState<string | undefined>();
   const [model, setModel] = useState<TtsModelId>("eleven_multilingual_v2");
-  const [maxClip, setMaxClip] = useState(DEFAULT_MAX_CLIP_SECONDS);
   const [scenes, setScenes] = useState<Scene[]>([]);
   const [audioSrc, setAudioSrc] = useState<string | null>(null);
   const [clips, setClips] = useState<Set<number>>(new Set());
@@ -66,7 +60,6 @@ export default function Studio({ projectId }: { projectId: string }) {
       setVoiceId(p.voiceId);
       setVoiceName(p.voiceName);
       setModel((p.modelId as TtsModelId) ?? "eleven_multilingual_v2");
-      setMaxClip(p.maxClipSeconds ?? DEFAULT_MAX_CLIP_SECONDS);
       setScenes(p.scenes ?? []);
       if (p.hasAudio) setAudioSrc(audioUrl(projectId, p.updatedAt));
       void listClips(projectId).then((list) => {
@@ -106,12 +99,6 @@ export default function Studio({ projectId }: { projectId: string }) {
     const t = title.trim() || "Untitled story";
     setTitle(t);
     save((p) => ({ ...p, title: t }));
-  }
-
-  function handleMaxClip(v: number) {
-    const clamped = Math.max(3, Math.min(15, Math.round(v || DEFAULT_MAX_CLIP_SECONDS)));
-    setMaxClip(clamped);
-    save((p) => ({ ...p, maxClipSeconds: clamped }));
   }
 
   async function handleRegenerateScript() {
@@ -193,9 +180,9 @@ export default function Studio({ projectId }: { projectId: string }) {
         body: JSON.stringify({
           words,
           visualBible: project.visualBible,
-          maxSeconds: maxClip,
           title: project.title,
           coreTurn: project.coreTurn,
+          scriptStyleId: project.scriptStyleId,
         }),
       });
       const data = await res.json();
@@ -206,7 +193,7 @@ export default function Studio({ projectId }: { projectId: string }) {
       setClips(new Set());
       setClipVersion((v) => v + 1);
       setScenes(next);
-      save((p) => ({ ...p, maxClipSeconds: maxClip, scenes: next }));
+      save((p) => ({ ...p, scenes: next }));
     } catch (e) {
       setError(e instanceof Error ? e.message : "Could not cut scenes.");
     } finally {
@@ -291,7 +278,7 @@ export default function Studio({ projectId }: { projectId: string }) {
           coreTurn={project.coreTurn}
         />
 
-        <VisualBibleView bible={project.visualBible} />
+        <VisualBibleView bible={project.visualBible} styleId={project.stylePresetId} />
 
         <div className="grid gap-4 lg:grid-cols-2">
           {/* Voiceover */}
@@ -352,31 +339,6 @@ export default function Studio({ projectId }: { projectId: string }) {
               <FilmIcon width={14} height={14} /> Scenes
             </p>
 
-            <div className="flex items-center justify-between">
-              <span className="text-xs text-faint">Max clip length</span>
-              <div className="flex items-center gap-2">
-                <button
-                  type="button"
-                  onClick={() => handleMaxClip(maxClip - 1)}
-                  className="btn btn-ghost !px-3 !py-1.5"
-                  aria-label="Decrease max clip length"
-                >
-                  −
-                </button>
-                <span className="w-12 text-center font-mono text-sm text-cream">
-                  {maxClip}s
-                </span>
-                <button
-                  type="button"
-                  onClick={() => handleMaxClip(maxClip + 1)}
-                  className="btn btn-ghost !px-3 !py-1.5"
-                  aria-label="Increase max clip length"
-                >
-                  +
-                </button>
-              </div>
-            </div>
-
             {!hasAudio ? (
               <p className="text-xs text-faint">
                 Generate a voiceover first — the AI reads its timestamps to cut
@@ -384,8 +346,8 @@ export default function Studio({ projectId }: { projectId: string }) {
               </p>
             ) : (
               <p className="text-xs text-faint">
-                The AI cuts the narration into visual beats; clips tile the whole
-                voiceover, each rounded up to a whole second for Kling.
+                The AI cuts the narration into visual beats and picks each
+                shot&rsquo;s length (up to 15s), tiling the whole voiceover.
                 {scenes.length > 0 &&
                   ` ${scenes.length} beats · ${formatClock(coverage.totalSpoken)} voiceover.`}
               </p>
@@ -435,7 +397,9 @@ export default function Studio({ projectId }: { projectId: string }) {
           <SceneList
             scenes={scenes}
             styleId={project.stylePresetId}
+            conceptStyleId={project.conceptStylePresetId}
             characters={project.visualBible.characters}
+            locations={project.visualBible.locations}
             coverage={coverage}
             projectId={projectId}
             clips={clips}

@@ -7,6 +7,8 @@ export type SceneBeat = {
   imagePrompt?: string;
   animationPrompt?: string;
   characterIds?: string[];
+  locationIds?: string[];
+  visualMode?: "live" | "concept";
 };
 
 /** Numbered word list with cumulative end-times, fed to the beat-cutting prompt. */
@@ -81,6 +83,8 @@ export function buildScenesFromBeats(
       imagePrompt: r.beat.imagePrompt,
       animationPrompt: r.beat.animationPrompt,
       characterIds: r.beat.characterIds,
+      locationIds: r.beat.locationIds,
+      visualMode: r.beat.visualMode,
     };
   });
 }

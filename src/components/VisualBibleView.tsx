@@ -2,9 +2,17 @@
 
 import { useState } from "react";
 import type { VisualBible } from "@/lib/types";
+import { composeReferencePrompt } from "@/lib/styles";
+import CopyButton from "./CopyButton";
 import { ChevronDownIcon } from "./icons";
 
-export default function VisualBibleView({ bible }: { bible: VisualBible }) {
+export default function VisualBibleView({
+  bible,
+  styleId,
+}: {
+  bible: VisualBible;
+  styleId: string;
+}) {
   const [open, setOpen] = useState(false);
   const count = bible.characters.length + bible.locations.length;
   if (count === 0) return null;
@@ -31,9 +39,26 @@ export default function VisualBibleView({ bible }: { bible: VisualBible }) {
       </button>
 
       {open && (
-        <div className="grid gap-5 border-t border-[var(--line)] px-5 py-5 sm:grid-cols-2">
-          <BibleColumn title="Characters" items={bible.characters} />
-          <BibleColumn title="Locations" items={bible.locations} />
+        <div className="border-t border-[var(--line)] px-5 py-5">
+          <p className="mb-4 text-xs text-faint">
+            Generate each reference image once, then attach it as a reference in
+            every scene that lists it — that&rsquo;s what keeps people and objects
+            identical across separately generated frames.
+          </p>
+          <div className="grid gap-5 sm:grid-cols-2">
+            <BibleColumn
+              title="Characters"
+              items={bible.characters}
+              styleId={styleId}
+              kind="character"
+            />
+            <BibleColumn
+              title="Locations & objects"
+              items={bible.locations}
+              styleId={styleId}
+              kind="location"
+            />
+          </div>
         </div>
       )}
     </section>
@@ -43,9 +68,13 @@ export default function VisualBibleView({ bible }: { bible: VisualBible }) {
 function BibleColumn({
   title,
   items,
+  styleId,
+  kind,
 }: {
   title: string;
   items: { id: string; name: string; visualDescription: string }[];
+  styleId: string;
+  kind: "character" | "location";
 }) {
   return (
     <div>
@@ -65,6 +94,11 @@ function BibleColumn({
                 <span className="font-mono text-[0.62rem] text-faint">
                   {it.id}
                 </span>
+                <CopyButton
+                  text={composeReferencePrompt(it, styleId, kind)}
+                  label="Reference prompt"
+                  className="ml-auto"
+                />
               </div>
               <p className="mt-0.5 text-xs leading-relaxed text-muted">
                 {it.visualDescription}

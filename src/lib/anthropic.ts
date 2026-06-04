@@ -65,13 +65,13 @@ export async function generateSceneBeats(
   words: Word[],
   bible: VisualBible,
   maxSeconds: number,
-  story: { title?: string; coreTurn?: string } = {},
+  opts: { title?: string; coreTurn?: string; system?: string } = {},
 ): Promise<SceneBeat[]> {
-  const userContent = `Max clip length: ${maxSeconds} seconds.
+  const userContent = `Hard maximum clip length: ${maxSeconds} seconds. Choose each beat's length yourself from its content and pacing — keep most beats short, and only approach this maximum when a beat genuinely needs a long, sustained hold.
 
 STORY
-Title: ${story.title?.trim() || "(untitled)"}
-Core turn / register: ${story.coreTurn?.trim() || "(plain retelling)"}
+Title: ${opts.title?.trim() || "(untitled)"}
+Core turn / register: ${opts.coreTurn?.trim() || "(plain retelling)"}
 
 VISUAL BIBLE
 ${serializeBible(bible)}
@@ -85,7 +85,11 @@ ${numberedWords(words)}`;
     // tool JSON truncates (stop_reason: max_tokens) and parses to nothing.
     max_tokens: 16000,
     system: [
-      { type: "text", text: SCENE_SYSTEM, cache_control: { type: "ephemeral" } },
+      {
+        type: "text",
+        text: opts.system ?? SCENE_SYSTEM,
+        cache_control: { type: "ephemeral" },
+      },
     ],
     tools: [SCENE_TOOL as unknown as Anthropic.Tool],
     tool_choice: { type: "tool", name: SCENE_TOOL.name },

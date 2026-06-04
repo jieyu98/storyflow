@@ -1,7 +1,8 @@
 "use client";
 
 import type { ReactNode } from "react";
-import type { BibleCharacter, Scene } from "@/lib/types";
+import type { Scene } from "@/lib/types";
+import type { SceneRecipe } from "@/lib/recipe";
 import { composeImagePrompt } from "@/lib/styles";
 import { formatClock } from "@/lib/text";
 import CopyButton from "./CopyButton";
@@ -11,7 +12,7 @@ import { ImageIcon, MotionIcon, PlayIcon } from "./icons";
 export default function SceneCard({
   scene,
   styleId,
-  characters,
+  recipe,
   projectId,
   hasClip,
   clipVersion,
@@ -20,15 +21,13 @@ export default function SceneCard({
 }: {
   scene: Scene;
   styleId: string;
-  characters: BibleCharacter[];
+  recipe: SceneRecipe;
   projectId: string;
   hasClip: boolean;
   clipVersion: number;
   onClipChange: (index: number, hasClip: boolean) => void;
   onPreview: (scene: Scene) => void;
 }) {
-  const nameById = (id: string) =>
-    characters.find((c) => c.id === id)?.name ?? id;
   const hasPrompts = Boolean(scene.imagePrompt);
   const composedImage = composeImagePrompt(scene.imagePrompt, styleId);
 
@@ -54,11 +53,9 @@ export default function SceneCard({
               over {scene.assignedDuration}s — needs a longer max
             </span>
           )}
-          {scene.characterIds?.map((id) => (
-            <span key={id} className="chip text-twilight-300">
-              {nameById(id)}
-            </span>
-          ))}
+          {scene.visualMode === "concept" && (
+            <span className="chip text-twilight-300">graphic</span>
+          )}
           <button
             type="button"
             onClick={() => onPreview(scene)}
@@ -78,6 +75,23 @@ export default function SceneCard({
         <p className="mt-1.5 text-sm leading-relaxed text-cream/90">
           {scene.text}
         </p>
+
+        <div className="mt-3 rounded-xl border border-twilight-500/25 bg-twilight-500/5 p-3">
+          <div className="mb-1.5 flex items-center gap-2">
+            <span className="text-xs font-semibold text-twilight-300">
+              Make this scene
+            </span>
+            <span className="chip text-twilight-300">{recipe.method}</span>
+          </div>
+          <ol className="space-y-1 text-xs leading-relaxed text-muted">
+            {recipe.steps.map((step, i) => (
+              <li key={i} className="flex gap-2">
+                <span className="font-mono text-twilight-300">{i + 1}.</span>
+                <span>{step}</span>
+              </li>
+            ))}
+          </ol>
+        </div>
 
         {hasPrompts ? (
           <div className="mt-4 space-y-3">

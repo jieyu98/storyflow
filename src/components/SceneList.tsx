@@ -1,8 +1,9 @@
 "use client";
 
 import type { Coverage } from "@/lib/scenes";
-import type { BibleCharacter, Scene } from "@/lib/types";
-import { composeImagePrompt } from "@/lib/styles";
+import type { BibleCharacter, BibleLocation, Scene } from "@/lib/types";
+import { composeImagePrompt, styleForScene } from "@/lib/styles";
+import { buildSceneRecipes } from "@/lib/recipe";
 import { formatClock } from "@/lib/text";
 import SceneCard from "./SceneCard";
 import CopyButton from "./CopyButton";
@@ -10,7 +11,9 @@ import CopyButton from "./CopyButton";
 export default function SceneList({
   scenes,
   styleId,
+  conceptStyleId,
   characters,
+  locations,
   coverage,
   projectId,
   clips,
@@ -20,7 +23,9 @@ export default function SceneList({
 }: {
   scenes: Scene[];
   styleId: string;
+  conceptStyleId?: string;
   characters: BibleCharacter[];
+  locations: BibleLocation[];
   coverage: Coverage;
   projectId: string;
   clips: Set<number>;
@@ -30,15 +35,18 @@ export default function SceneList({
 }) {
   if (scenes.length === 0) return null;
 
+  const recipes = buildSceneRecipes(scenes, { characters, locations });
   const allHavePrompts = scenes.every((s) => s.imagePrompt);
   const allText = scenes
     .map(
-      (s) =>
+      (s, i) =>
         `SCENE ${s.index + 1} — ${s.assignedDuration}s (${formatClock(
           s.tStart,
-        )}–${formatClock(s.tSpokenEnd)})\nNARRATION: ${s.text}\nIMAGE: ${composeImagePrompt(
+        )}–${formatClock(s.tSpokenEnd)})\nHOW: ${recipes[i].method} — ${recipes[i].steps.join(
+          " ",
+        )}\nNARRATION: ${s.text}\nIMAGE: ${composeImagePrompt(
           s.imagePrompt,
-          styleId,
+          styleForScene(s, styleId, conceptStyleId),
         )}\nANIMATION: ${s.animationPrompt ?? ""}`,
     )
     .join("\n\n———————\n\n");
@@ -60,16 +68,17 @@ export default function SceneList({
       </div>
 
       <p className="px-1 text-xs text-faint">
-        Tip: generate your first clean frame of a character, then reuse it as a
-        reference image in later shots to keep them looking the same.
+        Tip: generate the reference images in the Visual bible first, then attach
+        each as a reference in the scenes that list it. For graphic scenes, reuse
+        your first diagram as a style reference so they all match.
       </p>
 
-      {scenes.map((s) => (
+      {scenes.map((s, i) => (
         <SceneCard
           key={`${s.startWord}:${s.endWord}`}
           scene={s}
-          styleId={styleId}
-          characters={characters}
+          styleId={styleForScene(s, styleId, conceptStyleId)}
+          recipe={recipes[i]}
           projectId={projectId}
           hasClip={clips.has(s.index)}
           clipVersion={clipVersion}
