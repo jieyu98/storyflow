@@ -1,9 +1,8 @@
 // The 9:16 preview as a Remotion composition. It is rendered ONLY by the
 // in-browser <Player> (src/components/PreviewPlayer.tsx) — StoryFlow never
 // exports video, so this is a player, not a renderer. The composition sequences
-// each scene's uploaded clip under the voiceover by the scene's real timing,
-// shows a placeholder for scenes with no clip yet, and overlays `onScreenText`
-// (which the old preview silently dropped). Sizes are in 1080×1920 canvas space;
+// each scene's clip under the voiceover by the scene's real timing and shows a
+// placeholder for scenes with no clip yet. Sizes are in 1080×1920 canvas space;
 // the Player scales them down to the small stage.
 
 import { AbsoluteFill, Audio, OffthreadVideo, Sequence, useVideoConfig } from "remotion";
@@ -73,34 +72,6 @@ function SceneLayer({
           </span>
         </AbsoluteFill>
       )}
-
-      {scene.onScreenText && scene.onScreenText.trim() ? (
-        <AbsoluteFill
-          style={{
-            alignItems: "center",
-            justifyContent: "flex-end",
-            padding: "0 80px 180px",
-          }}
-        >
-          <div
-            style={{
-              fontFamily: "var(--font-sans)",
-              fontWeight: 800,
-              fontSize: 60,
-              lineHeight: 1.12,
-              color: "#ffffff",
-              textAlign: "center",
-              padding: "28px 44px",
-              borderRadius: 28,
-              background: "rgba(7,10,18,0.55)",
-              backdropFilter: "blur(6px)",
-              boxShadow: "0 24px 60px -20px rgba(0,0,0,0.8)",
-            }}
-          >
-            {scene.onScreenText.trim()}
-          </div>
-        </AbsoluteFill>
-      ) : null}
     </AbsoluteFill>
   );
 }

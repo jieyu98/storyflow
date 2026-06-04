@@ -32,15 +32,15 @@ your own clips, and the whole flow still works.
    explainer gets its own director).
 5. Each scene card shows its beat name, time range, integer clip length, shot
    type, and copy buttons for the image prompt (the right art-style preset
-   appended) and animation prompt — plus any **on-screen text** to overlay, a
+   appended) and animation prompt — plus a
    **production recipe** (generate fresh vs. reuse a reference image; image→video
    vs. extend), and which **reference images** to reuse for consistency. The
    Visual bible has a copy button for each entity's canonical **reference prompt**.
 6. Generate each clip in your own image-to-video tool, then **drag it onto its
    scene** and hit **Preview**. The preview is a **Remotion player** that
-   sequences the clips under the voiceover by real scene timing, burns in any
-   **on-screen text**, and shows a placeholder for clip-less scenes — with a
-   full-width per-scene **timeline** below it. (It's a player, not a renderer:
+   sequences the clips under the voiceover by real scene timing and shows a
+   placeholder for clip-less scenes — with a full-width per-scene **timeline**
+   below it. (It's a player, not a renderer:
    StoryFlow still doesn't export video.)
 
 The **Automate** panel under the script ties this together as a guided stepper:

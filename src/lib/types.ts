@@ -66,8 +66,6 @@ export type Scene = {
   visualMode?: "live" | "concept";
   /** Short shot label (e.g. "macro insert", "wide establishing"). */
   shotType?: string;
-  /** Optional caption/label to overlay in the editor — never baked into the image. */
-  onScreenText?: string;
 };
 
 export type Project = {

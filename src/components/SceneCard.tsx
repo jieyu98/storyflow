@@ -228,19 +228,6 @@ export default function SceneCard({
               text={scene.animationPrompt ?? ""}
               accent="twilight"
             />
-            {scene.onScreenText && (
-              <div className="rounded-xl border border-[var(--line)] bg-ink-950/50 p-3">
-                <div className="mb-2 flex items-center justify-between gap-2">
-                  <span className="text-xs font-semibold text-mint-400">
-                    On-screen text — overlay in your editor
-                  </span>
-                  <CopyButton text={scene.onScreenText} />
-                </div>
-                <p className="whitespace-pre-wrap font-mono text-xs leading-relaxed text-muted">
-                  {scene.onScreenText}
-                </p>
-              </div>
-            )}
           </div>
         ) : (
           <p className="mt-4 text-xs text-faint">

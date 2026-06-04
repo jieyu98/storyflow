@@ -30,7 +30,7 @@ asking.**
    the narration as numbered words tagged with end-times + the visual bible, and
    returns ordered **beats** (`emit_scenes`: each beat = the word index it ENDS
    on, a name, `shotType`, image prompt, animation prompt, `visualMode`
-   live/concept, optional `onScreenText`, `characterIds`, `locationIds`). The
+   live/concept, `characterIds`, `locationIds`). The
    scene **system prompt is per writing style** (`getSceneSystem` → `SCENE_SYSTEM`
    for stories, `SCENE_SYSTEM_EXPLAINER` for the YSK explainer). `/api/scenes`
    then calls `buildScenesFromBeats` to turn the beats into contiguous scenes
@@ -61,9 +61,9 @@ So Claude is called in steps 1 and 3; ElevenLabs only in step 2; Gemini in step 
 - **Two-track visuals**: each beat is tagged `visualMode` **live** (a real,
   filmable object/action → the project's primary art style) or **concept** (a
   visualization of an invisible idea → `conceptStylePresetId`). `styleForScene`
-  resolves the style per scene at display time. `shotType` drives shot variety;
-  `onScreenText` is an overlay caption kept OUT of the image prompt (image tools
-  garble text).
+  resolves the style per scene at display time. `shotType` drives shot variety.
+  No text is ever baked into the image prompt (image tools garble text) —
+  meaning is carried by the visual itself.
 - **Cross-shot consistency**: `composeReferencePrompt` builds a canonical
   reference-image prompt per bible entity (surfaced in `VisualBibleView`); beats
   carry `characterIds`/`locationIds` so each scene knows which reference to reuse.
@@ -134,8 +134,8 @@ So Claude is called in steps 1 and 3; ElevenLabs only in step 2; Gemini in step 
 - `src/components/PreviewPlayer.tsx` + `src/remotion/PreviewComposition.tsx` — the
   9:16 preview. It is a **Remotion `<Player>`** (a player, NOT a renderer — no
   video export, stays within the product boundary) driving a composition that
-  sequences each scene's clip under the voiceover by real timing, overlays
-  `onScreenText`, and shows a placeholder for clip-less scenes. `PreviewPlayer`
+  sequences each scene's clip under the voiceover by real timing and shows a
+  placeholder for clip-less scenes. `PreviewPlayer`
   runs the Player headless and keeps the campfire-styled controls + a full-width
   per-scene timeline.
 - `src/server/env.ts` — lazy, typed secret access; `ANTHROPIC_MODEL`.

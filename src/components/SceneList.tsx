@@ -68,9 +68,7 @@ export default function SceneList({
         )}\nNARRATION: ${s.text}\nIMAGE: ${composeImagePrompt(
           s.imagePrompt,
           styleForScene(s, styleId, conceptStyleId),
-        )}\nANIMATION: ${s.animationPrompt ?? ""}${
-          s.onScreenText ? `\nON-SCREEN TEXT: ${s.onScreenText}` : ""
-        }`,
+        )}\nANIMATION: ${s.animationPrompt ?? ""}`,
     )
     .join("\n\n———————\n\n");
 

@@ -96,12 +96,6 @@ export function buildSceneRecipes(
       steps.push("Animate the still with the animation prompt (image → video).");
     }
 
-    if (s.onScreenText && s.onScreenText.trim()) {
-      steps.push(
-        `Overlay the on-screen text "${s.onScreenText.trim()}" in your editor — don't bake it into the image.`,
-      );
-    }
-
     return { method, steps };
   });
 }
