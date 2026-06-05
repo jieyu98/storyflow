@@ -231,14 +231,75 @@ export async function deleteAllImages(
   });
 }
 
+/* ----------------------- image versions (history) ------------------------ */
+
+export type ImageVersion = { id: number; updatedAt: number; active: boolean };
+
+/** All stored versions for one image, newest first (the active one is master). */
+export async function listImageVersions(
+  projectId: string,
+  scope: ImageScope,
+  key: string,
+): Promise<ImageVersion[]> {
+  try {
+    const res = await fetch(
+      `/api/projects/${projectId}/images/${scope}/${encodeURIComponent(key)}/versions`,
+    );
+    if (!res.ok) return [];
+    const data = (await res.json()) as { versions?: ImageVersion[] };
+    return data.versions ?? [];
+  } catch {
+    return [];
+  }
+}
+
+/** Promote a stored version to master (active). */
+export async function setMasterImage(
+  projectId: string,
+  scope: ImageScope,
+  key: string,
+  id: number,
+): Promise<void> {
+  const res = await fetch(
+    `/api/projects/${projectId}/images/${scope}/${encodeURIComponent(key)}/versions`,
+    {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ id }),
+    },
+  );
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    throw new Error(data.error ?? "Failed to set master image.");
+  }
+}
+
+/** Delete a single stored version (not the whole image). */
+export async function deleteImageVersion(
+  projectId: string,
+  scope: ImageScope,
+  key: string,
+  id: number,
+): Promise<void> {
+  await fetch(
+    `/api/projects/${projectId}/images/${scope}/${encodeURIComponent(key)}?id=${id}`,
+    { method: "DELETE" },
+  );
+}
+
 export function imageUrl(
   projectId: string,
   scope: ImageScope,
   key: string,
   version?: number,
+  id?: number,
 ): string {
+  const params = new URLSearchParams();
+  if (id != null) params.set("id", String(id)); // a specific version's bytes
+  if (version) params.set("v", String(version)); // cache-bust nonce
+  const qs = params.toString();
   return `/api/projects/${projectId}/images/${scope}/${encodeURIComponent(key)}${
-    version ? `?v=${version}` : ""
+    qs ? `?${qs}` : ""
   }`;
 }
 

@@ -11,12 +11,28 @@ const globalForDb = globalThis as unknown as {
   __storyflowDb?: Database.Database;
 };
 
+// Guard so schema setup + migrations run once per module evaluation. On a dev
+// hot-reload this module is re-evaluated (resetting the flag) while the cached
+// connection persists, so any newly-added migration still applies live without
+// needing a server restart.
+let schemaReady = false;
+
 function db(): Database.Database {
-  if (globalForDb.__storyflowDb) return globalForDb.__storyflowDb;
+  if (globalForDb.__storyflowDb) {
+    ensureSchema(globalForDb.__storyflowDb);
+    return globalForDb.__storyflowDb;
+  }
   const dir = join(process.cwd(), ".data");
   mkdirSync(dir, { recursive: true });
   const conn = new Database(join(dir, "storyflow.db"));
   conn.pragma("journal_mode = WAL");
+  globalForDb.__storyflowDb = conn;
+  ensureSchema(conn);
+  return conn;
+}
+
+function ensureSchema(conn: Database.Database): void {
+  if (schemaReady) return;
   conn.exec(`
     CREATE TABLE IF NOT EXISTS projects (
       id         TEXT PRIMARY KEY,
@@ -37,15 +53,20 @@ function db(): Database.Database {
       updated_at  INTEGER,
       PRIMARY KEY (project_id, scene_index)
     );
+    -- Versioned: many rows per (project_id, scope, key); exactly one is active
+    -- (the "master"). Regenerating adds a new active row and demotes the rest;
+    -- older versions are kept so the user can promote one back.
     CREATE TABLE IF NOT EXISTS images (
+      id         INTEGER PRIMARY KEY AUTOINCREMENT,
       project_id TEXT,
       scope      TEXT,           -- 'ref' (bible entity) | 'scene' (starting frame)
       key        TEXT,           -- entity id, or scene index as text
       mime       TEXT,
       data       BLOB NOT NULL,
       updated_at INTEGER,
-      PRIMARY KEY (project_id, scope, key)
+      active     INTEGER NOT NULL DEFAULT 1
     );
+    CREATE INDEX IF NOT EXISTS idx_images_key ON images (project_id, scope, key);
     -- One row per billed API call. project_id is nullable (the first story call
     -- happens before the project is persisted). Rows survive project deletion so
     -- the global spend total stays accurate.
@@ -64,8 +85,37 @@ function db(): Database.Database {
     );
     CREATE INDEX IF NOT EXISTS idx_usage_project ON usage (project_id);
   `);
-  globalForDb.__storyflowDb = conn;
-  return conn;
+  migrateImagesToVersioned(conn);
+  schemaReady = true;
+}
+
+// Upgrade an old single-row-per-key `images` table (composite PK, no id/active
+// columns) to the versioned layout. Idempotent: a no-op once `active` exists.
+function migrateImagesToVersioned(conn: Database.Database): void {
+  const cols = conn
+    .prepare("PRAGMA table_info(images)")
+    .all() as { name: string }[];
+  if (cols.some((c) => c.name === "active")) return; // already migrated
+
+  conn.transaction(() => {
+    conn.exec(`
+      ALTER TABLE images RENAME TO images_legacy;
+      CREATE TABLE images (
+        id         INTEGER PRIMARY KEY AUTOINCREMENT,
+        project_id TEXT,
+        scope      TEXT,
+        key        TEXT,
+        mime       TEXT,
+        data       BLOB NOT NULL,
+        updated_at INTEGER,
+        active     INTEGER NOT NULL DEFAULT 1
+      );
+      INSERT INTO images (project_id, scope, key, mime, data, updated_at, active)
+        SELECT project_id, scope, key, mime, data, updated_at, 1 FROM images_legacy;
+      DROP TABLE images_legacy;
+      CREATE INDEX IF NOT EXISTS idx_images_key ON images (project_id, scope, key);
+    `);
+  })();
 }
 
 export function listProjects(): Project[] {
@@ -182,25 +232,32 @@ export function listClipIndexes(
 
 /* ------------------------------- images ---------------------------------- */
 
+/** Store a newly generated image as the active version, demoting prior ones. */
 export function saveImage(
   projectId: string,
   scope: string,
   key: string,
   mime: string,
   data: Buffer,
-): void {
-  db()
-    .prepare(
-      `INSERT INTO images (project_id, scope, key, mime, data, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?)
-       ON CONFLICT(project_id, scope, key) DO UPDATE SET
-         mime = excluded.mime,
-         data = excluded.data,
-         updated_at = excluded.updated_at`,
-    )
-    .run(projectId, scope, key, mime, data, Date.now());
+): number {
+  const conn = db();
+  return conn.transaction(() => {
+    conn
+      .prepare(
+        "UPDATE images SET active = 0 WHERE project_id = ? AND scope = ? AND key = ?",
+      )
+      .run(projectId, scope, key);
+    const info = conn
+      .prepare(
+        `INSERT INTO images (project_id, scope, key, mime, data, updated_at, active)
+         VALUES (?, ?, ?, ?, ?, ?, 1)`,
+      )
+      .run(projectId, scope, key, mime, data, Date.now());
+    return Number(info.lastInsertRowid);
+  })();
 }
 
+/** The active ("master") version for a key. */
 export function getImage(
   projectId: string,
   scope: string,
@@ -208,12 +265,104 @@ export function getImage(
 ): { mime: string; data: Buffer } | null {
   const row = db()
     .prepare(
-      "SELECT mime, data FROM images WHERE project_id = ? AND scope = ? AND key = ?",
+      `SELECT mime, data FROM images
+       WHERE project_id = ? AND scope = ? AND key = ?
+       ORDER BY active DESC, updated_at DESC, id DESC LIMIT 1`,
     )
     .get(projectId, scope, key) as { mime: string; data: Buffer } | undefined;
   return row ?? null;
 }
 
+/** A specific version by id (used to serve history thumbnails). */
+export function getImageVersion(
+  projectId: string,
+  id: number,
+): { mime: string; data: Buffer } | null {
+  const row = db()
+    .prepare("SELECT mime, data FROM images WHERE project_id = ? AND id = ?")
+    .get(projectId, id) as { mime: string; data: Buffer } | undefined;
+  return row ?? null;
+}
+
+/** All versions for a key, newest first, flagging the active one. */
+export function listImageVersions(
+  projectId: string,
+  scope: string,
+  key: string,
+): { id: number; updatedAt: number; active: boolean }[] {
+  const rows = db()
+    .prepare(
+      `SELECT id, updated_at, active FROM images
+       WHERE project_id = ? AND scope = ? AND key = ?
+       ORDER BY updated_at DESC, id DESC`,
+    )
+    .all(projectId, scope, key) as {
+    id: number;
+    updated_at: number;
+    active: number;
+  }[];
+  return rows.map((r) => ({
+    id: r.id,
+    updatedAt: r.updated_at,
+    active: r.active === 1,
+  }));
+}
+
+/** Promote one version to master (active), demoting the others for its key. */
+export function setActiveImage(
+  projectId: string,
+  scope: string,
+  key: string,
+  id: number,
+): void {
+  const conn = db();
+  conn.transaction(() => {
+    conn
+      .prepare(
+        "UPDATE images SET active = 0 WHERE project_id = ? AND scope = ? AND key = ?",
+      )
+      .run(projectId, scope, key);
+    conn
+      .prepare(
+        "UPDATE images SET active = 1 WHERE project_id = ? AND scope = ? AND key = ? AND id = ?",
+      )
+      .run(projectId, scope, key, id);
+  })();
+}
+
+/** Delete a single version. If it was the master, promote the newest remaining. */
+export function deleteImageVersion(
+  projectId: string,
+  scope: string,
+  key: string,
+  id: number,
+): void {
+  const conn = db();
+  conn.transaction(() => {
+    conn
+      .prepare("DELETE FROM images WHERE project_id = ? AND id = ?")
+      .run(projectId, id);
+    const hasActive = conn
+      .prepare(
+        "SELECT 1 FROM images WHERE project_id = ? AND scope = ? AND key = ? AND active = 1 LIMIT 1",
+      )
+      .get(projectId, scope, key);
+    if (!hasActive) {
+      conn
+        .prepare(
+          `UPDATE images SET active = 1
+           WHERE id = (
+             SELECT id FROM images
+             WHERE project_id = ? AND scope = ? AND key = ?
+             ORDER BY updated_at DESC, id DESC LIMIT 1
+           )`,
+        )
+        .run(projectId, scope, key);
+    }
+  })();
+}
+
+/** Delete every version for a key (the "Remove" action / scene re-cut). */
 export function deleteImage(
   projectId: string,
   scope: string,
@@ -238,7 +387,7 @@ export function listImageKeys(
 ): { scope: string; key: string }[] {
   const rows = db()
     .prepare(
-      "SELECT scope, key FROM images WHERE project_id = ? ORDER BY scope, key",
+      "SELECT DISTINCT scope, key FROM images WHERE project_id = ? ORDER BY scope, key",
     )
     .all(projectId) as { scope: string; key: string }[];
   return rows;

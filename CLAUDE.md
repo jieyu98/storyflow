@@ -42,8 +42,9 @@ asking.**
 4. **Generate images** (`/api/projects/[id]/images/generate` → Gemini, optional).
    `src/lib/gemini.ts` calls Nano Banana with a prompt (+ any reference images as
    `inlineData` for consistency) and stores the result in the `images` table
-   (`scope` `ref`|`scene`). Driven by the Visual bible (refs) and scene cards
-   (scene frames); needs `GEMINI_API_KEY`.
+   (`scope` `ref`|`scene`; scene frames are **versioned** — a regenerate keeps the
+   old image and the user picks the master). Driven by the Visual bible (refs) and
+   scene cards (scene frames); needs `GEMINI_API_KEY`.
 5. **Generate clips** (`/api/projects/[id]/clips/[index]/generate` → Grok,
    optional). `src/lib/grok.ts` animates the scene's generated starting frame
    (inlined as a base64 data URI) with its animation prompt via the **async** xAI
@@ -117,14 +118,22 @@ So Claude is called in steps 1 and 3; ElevenLabs only in step 2; Gemini in step 
   lives in `src/lib/grok.ts`, listed below.)
 - `src/lib/storage.ts` — **client** async wrapper over `/api/projects` (+ a
   one-time `migrateLegacy` from the old browser localStorage/IndexedDB); also the
-  image helpers (`generateImage`, `imageUrl`, `listImages`, `deleteImage`) and
-  `generateClip` (Grok image-to-video → the scene's clip).
+  image helpers (`generateImage`, `imageUrl(…, id?)`, `listImages`,
+  `deleteImage`, plus the version helpers `listImageVersions` /
+  `setMasterImage` / `deleteImageVersion`) and `generateClip` (Grok
+  image-to-video → the scene's clip).
 - `src/server/db.ts` — **server** SQLite (better-sqlite3) at `.data/storyflow.db`:
   `projects` (Project JSON) + `audio` (mp3 BLOB) + `clips` (per-scene video BLOB,
-  uploaded or Grok-generated) + `images` (generated stills BLOB, keyed by
-  `scope`/`key`) + `usage` (one row per billed API call: provider/model/operation
+  uploaded or Grok-generated) + `images` (generated stills BLOB) + `usage` (one
+  row per billed API call: provider/model/operation
   + tokens + `cost_usd`; nullable `project_id`, kept even after the project is
-  deleted). `recordUsage` / `usageSummary(projectId?)`.
+  deleted). `recordUsage` / `usageSummary(projectId?)`. **Images are versioned**:
+  many rows per `(project_id, scope, key)`, exactly one `active` (the "master").
+  `saveImage` demotes prior versions and inserts the new one as active (so a
+  regenerate *keeps* the old image instead of overwriting); `getImage` returns
+  the master (so the clip seed + thumbnail follow it). `listImageVersions` /
+  `setActiveImage` / `deleteImageVersion` / `getImageVersion` manage history; a
+  one-time idempotent migration upgrades the old single-row-per-key table.
 - **Cost tracking** — `src/lib/pricing.ts` (`anthropicCost`: pure, cache-aware
   USD/MTok rates — edit when Anthropic pricing changes) → `src/server/usage.ts`
   (`recordAnthropicUsage`: prices + logs, never throws) called from the `/api/story`
@@ -136,9 +145,11 @@ So Claude is called in steps 1 and 3; ElevenLabs only in step 2; Gemini in step 
   `[id]/clips` (list) + `[id]/clips/[index]` GET/PUT/DELETE +
   `[id]/clips/[index]/generate` (POST → Grok), and `[id]/images` (list +
   DELETE `?scope=` for bulk drop) + `[id]/images/generate` (POST) +
-  `[id]/images/[scope]/[key]` GET/DELETE. Regenerating scenes drops the old
-  clips AND `scope:"scene"` stills (both keyed by index, so a re-cut invalidates
-  them); `scope:"ref"` bible images are keyed by entity id and kept.
+  `[id]/images/[scope]/[key]` GET/DELETE (both take `?id=` for a specific
+  version) + `[id]/images/[scope]/[key]/versions` (GET list / POST set-master).
+  Regenerating scenes drops the old clips AND `scope:"scene"` stills (all
+  versions, keyed by index, so a re-cut invalidates them); `scope:"ref"` bible
+  images are keyed by entity id and kept.
 - `src/components/Automate.tsx` — a slim **progress readout** shown under the
   script: a progress bar + one-line status across the four stages (voiceover,
   scenes, references, clips). It performs **no** actions — each stage is done in
@@ -153,7 +164,11 @@ So Claude is called in steps 1 and 3; ElevenLabs only in step 2; Gemini in step 
   in-app starting-frame generation (`onGenerateImage`, passing that scene's
   `characterIds`/`locationIds` reference images to Gemini for cross-shot
   consistency) and clip generation (`onGenerateClip` → Grok, enabled once the
-  frame exists), and the clip drop. Rendered by `SceneList`.
+  frame exists), and the clip drop. The frame shows a **master slot** (drop
+  target) beside a **history strip** of every stored version: drag a thumbnail
+  onto the slot (or click) to promote it to master, ✕ to delete one version.
+  Versioning is scene-frame only; the Visual bible is unchanged. Rendered by
+  `SceneList`.
 - `src/lib/grok.ts` — `generateVideoAndWait`: submit + poll the async xAI video
   API, return the finished mp4 url. `GROK_VIDEO_MODEL` in `src/server/env.ts`;
   gated behind `XAI_API_KEY`. The only place the app generates video.
