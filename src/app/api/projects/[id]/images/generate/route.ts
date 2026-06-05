@@ -2,9 +2,11 @@ import { NextResponse } from "next/server";
 import { generateImage, type InlineImage } from "@/lib/gemini";
 import { getImage, saveImage } from "@/server/db";
 import { apiError } from "@/lib/http";
+import { IMAGE_MODELS } from "@/lib/types";
 
 export const runtime = "nodejs";
-export const maxDuration = 120;
+// Flex can queue for minutes, so allow a long window (advisory locally).
+export const maxDuration = 600;
 
 type Ctx = { params: Promise<{ id: string }> };
 
@@ -17,6 +19,8 @@ export async function POST(req: Request, { params }: Ctx) {
       prompt?: string;
       referenceKeys?: string[];
       aspectRatio?: string;
+      flex?: boolean;
+      imageModelId?: string;
     };
 
     const scope = body.scope === "scene" ? "scene" : "ref";
@@ -39,10 +43,16 @@ export async function POST(req: Request, { params }: Ctx) {
       }
     }
 
+    // Only honor a model from the known allowlist; else gemini.ts uses its default.
+    const model = IMAGE_MODELS.some((m) => m.id === body.imageModelId)
+      ? body.imageModelId
+      : undefined;
     const img = await generateImage({
       prompt,
       inputImages,
       aspectRatio: body.aspectRatio ?? (scope === "scene" ? "9:16" : "1:1"),
+      flex: body.flex === true,
+      model,
     });
 
     saveImage(id, scope, key, img.mime, Buffer.from(img.base64, "base64"));

@@ -195,6 +195,8 @@ export async function generateImage(
     prompt: string;
     referenceKeys?: string[];
     aspectRatio?: string;
+    flex?: boolean;
+    imageModelId?: string;
   },
 ): Promise<void> {
   const res = await fetch(`/api/projects/${projectId}/images/generate`, {

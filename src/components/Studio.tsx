@@ -22,8 +22,10 @@ import {
 } from "@/lib/storage";
 import { formatClock, formatUsd } from "@/lib/text";
 import {
+  DEFAULT_IMAGE_MODEL_ID,
   DEFAULT_SCENE_MODEL_ID,
   DEFAULT_STORY_MODEL_ID,
+  IMAGE_MODELS,
   SCENE_MODELS,
   type Project,
   type Scene,
@@ -38,7 +40,14 @@ import VoiceoverPlayer from "./VoiceoverPlayer";
 import SceneList from "./SceneList";
 import PreviewPlayer from "./PreviewPlayer";
 import Automate from "./Automate";
-import { ArrowIcon, FilmIcon, MicIcon, SparkIcon, Spinner } from "./icons";
+import {
+  ArrowIcon,
+  FilmIcon,
+  ImageIcon,
+  MicIcon,
+  SparkIcon,
+  Spinner,
+} from "./icons";
 
 export default function Studio({ projectId }: { projectId: string }) {
   const [project, setProject] = useState<Project | null | undefined>(undefined);
@@ -304,7 +313,14 @@ export default function Studio({ projectId }: { projectId: string }) {
     prompt: string,
     referenceKeys?: string[],
   ) {
-    await generateImage(projectId, { scope, key, prompt, referenceKeys });
+    await generateImage(projectId, {
+      scope,
+      key,
+      prompt,
+      referenceKeys,
+      flex: project?.flexImages,
+      imageModelId: project?.imageModelId,
+    });
     setImages((prev) => new Set(prev).add(`${scope}:${key}`));
     setImageVersion((v) => v + 1);
   }
@@ -415,6 +431,50 @@ export default function Studio({ projectId }: { projectId: string }) {
             refDoneIds={project.refDoneIds ?? []}
           />
         )}
+
+        <section className="surface p-5">
+          <p className="eyebrow flex items-center gap-2">
+            <ImageIcon width={14} height={14} /> Image generation
+          </p>
+          <p className="mt-1 text-xs text-faint">
+            Used for bible reference images and scene starting frames (Nano
+            Banana, in-app).
+          </p>
+
+          <p className="eyebrow mb-2 mt-4">Model</p>
+          <div className="grid grid-cols-3 gap-2">
+            {IMAGE_MODELS.map((m) => {
+              const active =
+                m.id === (project.imageModelId ?? DEFAULT_IMAGE_MODEL_ID);
+              return (
+                <button
+                  key={m.id}
+                  type="button"
+                  onClick={() => save((p) => ({ ...p, imageModelId: m.id }))}
+                  title={m.blurb}
+                  className={`btn !px-3 !py-2 !text-xs ${
+                    active ? "btn-ember" : "btn-ghost opacity-80"
+                  }`}
+                >
+                  {m.name}
+                </button>
+              );
+            })}
+          </div>
+
+          <button
+            type="button"
+            onClick={() => save((p) => ({ ...p, flexImages: !p.flexImages }))}
+            className={`btn mt-4 !text-xs ${
+              project.flexImages ? "btn-ember" : "btn-ghost opacity-80"
+            }`}
+          >
+            Flex tier {project.flexImages ? "on" : "off"}
+          </button>
+          <p className="mt-2 text-xs text-faint">
+            Flex: ~50% cheaper, but slower (minutes) and best-effort — may retry.
+          </p>
+        </section>
 
         <VisualBibleView
           bible={project.visualBible}

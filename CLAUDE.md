@@ -106,10 +106,15 @@ So Claude is called in steps 1 and 3; ElevenLabs only in step 2; Gemini in step 
 - `src/lib/anthropic.ts` — `generateStory`, `generateSceneBeats` (forced tool use + prompt caching).
 - `src/lib/elevenlabs.ts` — `listVoices` (v2), `ttsWithTimestamps`.
 - `src/lib/gemini.ts` — `generateImage` (Nano Banana via `generateContent`): text
-  prompt + optional reference images → one still. `GEMINI_IMAGE_MODEL` in
-  `src/server/env.ts` picks the model (default `gemini-3-pro-image`). The only
-  place the app generates **stills**; gated behind `GEMINI_API_KEY`. (Video lives
-  in `src/lib/grok.ts`, listed below.)
+  prompt + optional reference images → one still. The model is **user-selectable
+  per project** (`IMAGE_MODELS` → `Project.imageModelId`: Pro / Flash / original
+  Nano Banana), allowlisted in the generate route and falling back to
+  `GEMINI_IMAGE_MODEL` (`src/server/env.ts`, default `gemini-3-pro-image`). A
+  `flex` option (`Project.flexImages`) uses the **Flex service tier** (~50%
+  cheaper, slower) — adds `service_tier:"flex"` + retry-on-503/429 with backoff +
+  a long timeout. Both are set in the studio's **Image generation** section. The
+  only place the app generates **stills**; gated behind `GEMINI_API_KEY`. (Video
+  lives in `src/lib/grok.ts`, listed below.)
 - `src/lib/storage.ts` — **client** async wrapper over `/api/projects` (+ a
   one-time `migrateLegacy` from the old browser localStorage/IndexedDB); also the
   image helpers (`generateImage`, `imageUrl`, `listImages`, `deleteImage`) and

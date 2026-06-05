@@ -92,6 +92,10 @@ export type Project = {
   scriptModelId?: StoryModelId;
   /** Claude model used to cut scenes (see SCENE_MODELS); falls back to the server default. */
   sceneModelId?: SceneModelId;
+  /** Gemini image model (see IMAGE_MODELS); falls back to the server default. */
+  imageModelId?: GeminiImageModelId;
+  /** Generate Gemini images on the Flex tier (~50% cheaper, slower). */
+  flexImages?: boolean;
   voiceId?: string;
   voiceName?: string;
   modelId?: string;
@@ -174,6 +178,38 @@ export const SCENE_MODELS: ClaudeModelOption[] = [
 ];
 
 export const DEFAULT_SCENE_MODEL_ID: SceneModelId = "claude-sonnet-4-6";
+
+/* --- Gemini image generation (`/api/projects/[id]/images/generate`) --- */
+export type GeminiImageModelId =
+  | "gemini-3-pro-image"
+  | "gemini-3.1-flash-image"
+  | "gemini-2.5-flash-image";
+
+export type ImageModelOption = {
+  id: GeminiImageModelId;
+  name: string;
+  blurb: string;
+};
+
+export const IMAGE_MODELS: ImageModelOption[] = [
+  {
+    id: "gemini-3-pro-image",
+    name: "Nano Banana Pro",
+    blurb: "Best quality + text/reference consistency. ~$0.13/image. Default.",
+  },
+  {
+    id: "gemini-3.1-flash-image",
+    name: "Nano Banana 2",
+    blurb: "Flash — cheaper & faster. ~$0.07/image.",
+  },
+  {
+    id: "gemini-2.5-flash-image",
+    name: "Nano Banana 1",
+    blurb: "Original, cheapest. ~$0.04/image.",
+  },
+];
+
+export const DEFAULT_IMAGE_MODEL_ID: GeminiImageModelId = "gemini-3-pro-image";
 
 /** TTS model options that reliably return word/character alignment. */
 export type TtsModelId = "eleven_multilingual_v2" | "eleven_flash_v2_5";
