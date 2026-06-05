@@ -5,7 +5,7 @@
 import Database from "better-sqlite3";
 import { mkdirSync } from "node:fs";
 import { join } from "node:path";
-import type { Project } from "@/lib/types";
+import type { ClipBatch, Project } from "@/lib/types";
 
 const globalForDb = globalThis as unknown as {
   __storyflowDb?: Database.Database;
@@ -52,6 +52,14 @@ function ensureSchema(conn: Database.Database): void {
       video       BLOB NOT NULL,
       updated_at  INTEGER,
       PRIMARY KEY (project_id, scene_index)
+    );
+    -- One async Grok Batch clip-generation job per project (ClipBatch JSON). Kept
+    -- out of the projects row so the background poller can write it without
+    -- clobbering the client's fire-and-forget project saves.
+    CREATE TABLE IF NOT EXISTS clip_batches (
+      project_id TEXT PRIMARY KEY,
+      data       TEXT NOT NULL,
+      updated_at INTEGER
     );
     -- Versioned: many rows per (project_id, scope, key); exactly one is active
     -- (the "master"). Regenerating adds a new active row and demotes the rest;
@@ -156,6 +164,7 @@ export function deleteProject(id: string): void {
   conn.prepare("DELETE FROM audio WHERE project_id = ?").run(id);
   conn.prepare("DELETE FROM clips WHERE project_id = ?").run(id);
   conn.prepare("DELETE FROM images WHERE project_id = ?").run(id);
+  conn.prepare("DELETE FROM clip_batches WHERE project_id = ?").run(id);
 }
 
 export function saveAudio(id: string, mp3: Buffer): void {
@@ -228,6 +237,41 @@ export function listClipIndexes(
     )
     .all(projectId) as { scene_index: number; mime: string }[];
   return rows.map((r) => ({ index: r.scene_index, mime: r.mime }));
+}
+
+/* ----------------------------- clip batches ------------------------------ */
+
+export function saveClipBatch(projectId: string, batch: ClipBatch): void {
+  db()
+    .prepare(
+      `INSERT INTO clip_batches (project_id, data, updated_at)
+       VALUES (?, ?, ?)
+       ON CONFLICT(project_id) DO UPDATE SET
+         data = excluded.data,
+         updated_at = excluded.updated_at`,
+    )
+    .run(projectId, JSON.stringify(batch), Date.now());
+}
+
+export function getClipBatch(projectId: string): ClipBatch | null {
+  const row = db()
+    .prepare("SELECT data FROM clip_batches WHERE project_id = ?")
+    .get(projectId) as { data: string } | undefined;
+  return row ? (JSON.parse(row.data) as ClipBatch) : null;
+}
+
+export function deleteClipBatch(projectId: string): void {
+  db().prepare("DELETE FROM clip_batches WHERE project_id = ?").run(projectId);
+}
+
+/** Project ids whose clip batch is still being processed (poller work-list). */
+export function listOpenClipBatchProjectIds(): string[] {
+  const rows = db()
+    .prepare(
+      "SELECT project_id FROM clip_batches WHERE json_extract(data, '$.status') = 'open'",
+    )
+    .all() as { project_id: string }[];
+  return rows.map((r) => r.project_id);
 }
 
 /* ------------------------------- images ---------------------------------- */

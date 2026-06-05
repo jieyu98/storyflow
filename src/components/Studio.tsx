@@ -7,11 +7,13 @@ import { sceneCoverage } from "@/lib/scenes";
 import {
   audioUrl,
   base64ToBytes,
+  cancelClipBatch,
   deleteAllClips,
   deleteAllImages,
   deleteImage,
   generateClip,
   generateImage,
+  getClipBatch,
   getProject,
   getUsage,
   listClips,
@@ -27,6 +29,7 @@ import {
   DEFAULT_STORY_MODEL_ID,
   IMAGE_MODELS,
   SCENE_MODELS,
+  type ClipBatch,
   type Project,
   type Scene,
   type SceneModelId,
@@ -38,6 +41,7 @@ import VisualBibleView from "./VisualBibleView";
 import VoicePicker from "./VoicePicker";
 import VoiceoverPlayer from "./VoiceoverPlayer";
 import SceneList from "./SceneList";
+import ClipBatchPanel from "./ClipBatchPanel";
 import PreviewPlayer from "./PreviewPlayer";
 import Automate from "./Automate";
 import {
@@ -68,6 +72,7 @@ export default function Studio({ projectId }: { projectId: string }) {
   const [audioSrc, setAudioSrc] = useState<string | null>(null);
   const [clips, setClips] = useState<Set<number>>(new Set());
   const [clipVersion, setClipVersion] = useState(0);
+  const [clipBatch, setClipBatch] = useState<ClipBatch | null>(null);
   const [images, setImages] = useState<Set<string>>(new Set());
   const [imageVersion, setImageVersion] = useState(0);
   const [claudeUsd, setClaudeUsd] = useState(0);
@@ -101,6 +106,9 @@ export default function Studio({ projectId }: { projectId: string }) {
       if (p.hasAudio) setAudioSrc(audioUrl(projectId, p.updatedAt));
       void listClips(projectId).then((list) => {
         if (!cancelled) setClips(new Set(list.map((c) => c.index)));
+      });
+      void getClipBatch(projectId).then((cb) => {
+        if (!cancelled) setClipBatch(cb);
       });
       void listImages(projectId).then((keys) => {
         if (!cancelled) setImages(new Set(keys));
@@ -246,6 +254,12 @@ export default function Studio({ projectId }: { projectId: string }) {
       // Bible reference images (scope "ref") are keyed by entity id, so they stay.
       await deleteAllClips(projectId);
       await deleteAllImages(projectId, "scene");
+      // A re-cut renumbers scenes, so any in-flight clip batch (keyed by the old
+      // indices) is invalid — cancel it best-effort and clear it.
+      if (clipBatch) {
+        void cancelClipBatch(projectId);
+        setClipBatch(null);
+      }
       setClips(new Set());
       setClipVersion((v) => v + 1);
       setImages((prev) => {
@@ -285,6 +299,18 @@ export default function Studio({ projectId }: { projectId: string }) {
       const next = new Set(prev);
       if (has) next.add(index);
       else next.delete(index);
+      return next;
+    });
+    setClipVersion((v) => v + 1);
+  }
+
+  // The clip-batch poller saved some clips server-side — reflect them in the UI.
+  // The panel only sends newly-downloaded indices, so just merge + bump.
+  function handleClipsSaved(indices: number[]) {
+    if (indices.length === 0) return;
+    setClips((prev) => {
+      const next = new Set(prev);
+      for (const i of indices) next.add(i);
       return next;
     });
     setClipVersion((v) => v + 1);
@@ -622,6 +648,20 @@ export default function Studio({ projectId }: { projectId: string }) {
               voiceover. Empty scenes show a placeholder.
             </p>
           </section>
+        )}
+
+        {scenes.length > 0 && (
+          <ClipBatchPanel
+            projectId={projectId}
+            scenes={scenes}
+            styleId={project.stylePresetId}
+            conceptStyleId={project.conceptStylePresetId}
+            images={images}
+            clips={clips}
+            clipBatch={clipBatch}
+            onClipBatchChange={setClipBatch}
+            onClipsSaved={handleClipsSaved}
+          />
         )}
 
         {scenes.length > 0 && (

@@ -97,3 +97,152 @@ export async function generateVideoAndWait(
   }
   throw new GrokError(504, "Timed out waiting for the video.");
 }
+
+/* ------------------------------ batch API -------------------------------- */
+// xAI Batch API: submit many video jobs at once (cheaper, async up to ~24h).
+//   POST /v1/batches                       -> { batch_id }
+//   POST /v1/batches/{id}/requests         (add inline requests)
+//   GET  /v1/batches/{id}                  -> { state, expires_at }
+//   GET  /v1/batches/{id}/results          -> { results, pagination_token }
+//   POST /v1/batches/{id}:cancel
+// Each video request mirrors the sync /v1/videos/generations body, so
+// image-to-video works via the same `image: { url }` (base64 data URI) field.
+
+const authHeader = () => ({
+  Authorization: `Bearer ${serverEnv.XAI_API_KEY}`,
+});
+
+export type BatchState = {
+  num_requests: number;
+  num_pending: number;
+  num_success: number;
+  num_error: number;
+  num_cancelled?: number;
+};
+
+export async function createBatch(name: string): Promise<string> {
+  const res = await fetch(`${BASE}/v1/batches`, {
+    method: "POST",
+    headers: { ...authHeader(), "content-type": "application/json" },
+    cache: "no-store",
+    body: JSON.stringify({ name }),
+  });
+  if (!res.ok) throw new GrokError(res.status, await readError(res));
+  const data = (await res.json()) as { batch_id?: string };
+  if (!data.batch_id) throw new GrokError(502, "Grok returned no batch id.");
+  return data.batch_id;
+}
+
+export type VideoBatchRequest = {
+  batchRequestId: string;
+  prompt: string;
+  /** base64 data URI of the starting frame (image-to-video). */
+  image?: string;
+  duration?: number;
+  aspectRatio?: string;
+  resolution?: string;
+};
+
+export async function addVideoBatchRequests(
+  batchId: string,
+  reqs: VideoBatchRequest[],
+): Promise<void> {
+  const batch_requests = reqs.map((r) => ({
+    batch_request_id: r.batchRequestId,
+    batch_request: {
+      video_generation: {
+        model: GROK_VIDEO_MODEL,
+        prompt: r.prompt,
+        ...(r.image ? { image: { url: r.image } } : {}),
+        ...(r.duration ? { duration: r.duration } : {}),
+        aspect_ratio: r.aspectRatio ?? "9:16",
+        resolution: r.resolution ?? "720p",
+      },
+    },
+  }));
+  const res = await fetch(`${BASE}/v1/batches/${batchId}/requests`, {
+    method: "POST",
+    headers: { ...authHeader(), "content-type": "application/json" },
+    cache: "no-store",
+    body: JSON.stringify({ batch_requests }),
+  });
+  if (!res.ok) throw new GrokError(res.status, await readError(res));
+}
+
+export async function getBatch(
+  batchId: string,
+): Promise<{ state: BatchState; expiresAt?: number }> {
+  const res = await fetch(`${BASE}/v1/batches/${batchId}`, {
+    headers: authHeader(),
+    cache: "no-store",
+  });
+  if (!res.ok) throw new GrokError(res.status, await readError(res));
+  const data = (await res.json()) as {
+    state?: Partial<BatchState>;
+    expires_at?: string | number;
+  };
+  const state: BatchState = {
+    num_requests: data.state?.num_requests ?? 0,
+    num_pending: data.state?.num_pending ?? 0,
+    num_success: data.state?.num_success ?? 0,
+    num_error: data.state?.num_error ?? 0,
+    num_cancelled: data.state?.num_cancelled,
+  };
+  const expiresAt =
+    data.expires_at != null ? new Date(data.expires_at).getTime() : undefined;
+  return { state, expiresAt: Number.isNaN(expiresAt) ? undefined : expiresAt };
+}
+
+export type BatchVideoResult = {
+  batchRequestId: string;
+  videoUrl?: string;
+  costTicks?: number;
+  errorMessage?: string;
+};
+
+/** One page of results. Loop on `paginationToken` until it's undefined. */
+export async function getBatchResults(
+  batchId: string,
+  paginationToken?: string,
+): Promise<{ results: BatchVideoResult[]; paginationToken?: string }> {
+  const url = new URL(`${BASE}/v1/batches/${batchId}/results`);
+  url.searchParams.set("limit", "100");
+  if (paginationToken) url.searchParams.set("pagination_token", paginationToken);
+  const res = await fetch(url, { headers: authHeader(), cache: "no-store" });
+  if (!res.ok) throw new GrokError(res.status, await readError(res));
+  const data = (await res.json()) as {
+    results?: {
+      batch_request_id?: string;
+      error_message?: string;
+      batch_result?: {
+        error_message?: string;
+        response?: {
+          video_generation?: {
+            video?: { url?: string };
+            usage?: { cost_in_usd_ticks?: number };
+          };
+        };
+      };
+    }[];
+    pagination_token?: string | null;
+  };
+  const results = (data.results ?? []).map((r) => {
+    const vg = r.batch_result?.response?.video_generation;
+    return {
+      batchRequestId: r.batch_request_id ?? "",
+      videoUrl: vg?.video?.url,
+      costTicks: vg?.usage?.cost_in_usd_ticks,
+      errorMessage: r.error_message ?? r.batch_result?.error_message,
+    };
+  });
+  return { results, paginationToken: data.pagination_token ?? undefined };
+}
+
+export async function cancelBatch(batchId: string): Promise<void> {
+  const res = await fetch(`${BASE}/v1/batches/${batchId}:cancel`, {
+    method: "POST",
+    headers: authHeader(),
+    cache: "no-store",
+  });
+  if (!res.ok) throw new GrokError(res.status, await readError(res));
+}

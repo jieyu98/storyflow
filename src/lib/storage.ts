@@ -3,7 +3,7 @@
 // is the thin async client, plus a one-time migration of any projects left in
 // the old browser localStorage / IndexedDB.
 
-import type { Project } from "./types";
+import type { ClipBatch, Project } from "./types";
 
 const hasWindow = typeof window !== "undefined";
 
@@ -166,6 +166,53 @@ export function clipUrl(
   version?: number,
 ): string {
   return `/api/projects/${projectId}/clips/${sceneIndex}${version ? `?v=${version}` : ""}`;
+}
+
+/* --------------------------- clip batch (Grok) --------------------------- */
+
+export type ClipBatchSceneInput = {
+  index: number;
+  prompt: string;
+  duration?: number;
+  aspectRatio?: string;
+};
+
+/** Submit selected scenes as one async Grok batch. Throws with server message. */
+export async function submitClipBatch(
+  projectId: string,
+  scenes: ClipBatchSceneInput[],
+): Promise<{ clipBatch: ClipBatch; skipped: number[] }> {
+  const res = await fetch(`/api/projects/${projectId}/clips/batch`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ scenes }),
+  });
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    throw new Error(data.error ?? "Could not submit the clip batch.");
+  }
+  return res.json();
+}
+
+/** Current batch status (the server-side poller keeps it fresh). */
+export async function getClipBatch(projectId: string): Promise<ClipBatch | null> {
+  try {
+    const res = await fetch(`/api/projects/${projectId}/clips/batch`);
+    if (!res.ok) return null;
+    return (await res.json()).clipBatch ?? null;
+  } catch {
+    return null;
+  }
+}
+
+export async function cancelClipBatch(
+  projectId: string,
+): Promise<ClipBatch | null> {
+  const res = await fetch(`/api/projects/${projectId}/clips/batch`, {
+    method: "DELETE",
+  });
+  if (!res.ok) return null;
+  return (await res.json()).clipBatch ?? null;
 }
 
 /* -------------------------- generated images ----------------------------- */

@@ -111,6 +111,35 @@ export type Project = {
   refDoneIds?: string[];
 };
 
+/* ---------------------------- clip batch (Grok) --------------------------- */
+// Async Grok Batch API job that generates many scene clips at once (cheaper,
+// slower). State lives in its own `clip_batches` DB table (NOT on the Project
+// JSON) because a server-side background poller writes it concurrently with the
+// client's fire-and-forget project saves.
+
+export type ClipBatchReqState = "pending" | "succeeded" | "failed" | "downloaded";
+
+export type ClipBatchRequest = {
+  sceneIndex: number;
+  /** `scene-<index>` — links a batch result back to its scene. */
+  batchRequestId: string;
+  state: ClipBatchReqState;
+  error?: string;
+};
+
+export type ClipBatch = {
+  /** xAI batch id. */
+  batchId: string;
+  createdAt: number;
+  /** xAI results expiry (ms epoch) — after this the signed media is unreachable. */
+  expiresAt?: number;
+  status: "open" | "complete" | "cancelled" | "expired";
+  requests: ClipBatchRequest[];
+  counts?: { total: number; pending: number; success: number; error: number };
+  /** Cumulative cost (ticks, 1e-10 USD) already metered — guards double-charging. */
+  costTicks?: number;
+};
+
 /** Trimmed voice shape surfaced to the client by /api/voices. */
 export type VoiceOption = {
   voice_id: string;
