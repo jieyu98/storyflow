@@ -88,6 +88,8 @@ export type Project = {
   stylePresetId: string;
   /** Art-style for "concept" scenes (explainer diagrams); falls back to stylePresetId. */
   conceptStylePresetId?: string;
+  /** Claude model used to write the script (see STORY_MODELS); falls back to the server default. */
+  scriptModelId?: StoryModelId;
   /** Claude model used to cut scenes (see SCENE_MODELS); falls back to the server default. */
   sceneModelId?: SceneModelId;
   voiceId?: string;
@@ -114,19 +116,46 @@ export type VoiceOption = {
   labels?: Record<string, string>;
 };
 
-/** Claude models offered for scene cutting (`/api/scenes`). */
-export type SceneModelId =
+/** Claude models offered for the user-selectable steps (script writing, scene cutting). */
+export type ClaudeModelId =
   | "claude-sonnet-4-6"
   | "claude-opus-4-8"
   | "claude-haiku-4-5-20251001";
 
-export type SceneModelOption = {
-  id: SceneModelId;
+export type ClaudeModelOption = {
+  id: ClaudeModelId;
   name: string;
   blurb: string;
 };
 
-export const SCENE_MODELS: SceneModelOption[] = [
+/* --- script writing (`/api/story`) --- */
+export type StoryModelId = ClaudeModelId;
+
+export const STORY_MODELS: ClaudeModelOption[] = [
+  {
+    id: "claude-sonnet-4-6",
+    name: "Sonnet 4.6",
+    blurb: "Balanced quality and speed. Default.",
+  },
+  {
+    id: "claude-opus-4-8",
+    name: "Opus 4.8",
+    blurb: "Richest, most vivid writing. Slower.",
+  },
+  {
+    id: "claude-haiku-4-5-20251001",
+    name: "Haiku 4.5",
+    blurb: "Fastest and cheapest.",
+  },
+];
+
+export const DEFAULT_STORY_MODEL_ID: StoryModelId = "claude-sonnet-4-6";
+
+/* --- scene cutting (`/api/scenes`) --- */
+export type SceneModelId = ClaudeModelId;
+export type SceneModelOption = ClaudeModelOption;
+
+export const SCENE_MODELS: ClaudeModelOption[] = [
   {
     id: "claude-sonnet-4-6",
     name: "Sonnet 4.6",

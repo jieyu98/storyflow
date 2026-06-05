@@ -164,8 +164,14 @@ So Claude is called in steps 1 and 3; ElevenLabs only in step 2; Gemini in step 
 - **Secrets** only via `serverEnv` in `src/server/env.ts` (lazy getters; throw at
   request time, never at build). Keys live in `.env.local` (gitignored).
 - **Claude calls** use forced tool use for structured output, with
-  `cache_control` on the system prompt. Model is `ANTHROPIC_MODEL`
-  (`claude-sonnet-4-6`).
+  `cache_control` on the system prompt. `ANTHROPIC_MODEL`
+  (`claude-sonnet-4-6`) is the default, but both Claude steps are
+  **user-selectable** (Sonnet/Opus/Haiku) and persisted on the Project:
+  script writing via `STORY_MODELS` → `Project.scriptModelId` (home page +
+  `ScriptCard` picker), scene cutting via `SCENE_MODELS` → `Project.sceneModelId`
+  (Scenes-section picker). Each route allowlists the id before passing it to the
+  lib, which falls back to `ANTHROPIC_MODEL`. The actual model used is recorded in
+  the `usage` table for cost tracking.
 - **Design system** lives in `src/app/globals.css` (Tailwind v4 `@theme` tokens:
   ink/cream/ember/twilight, fonts Fraunces/Hanken/JetBrains Mono, `.surface`,
   `.btn-ember`, `.field`, grain + glow). Reuse these classes; the look is a dark

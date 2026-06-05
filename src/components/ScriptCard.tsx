@@ -1,6 +1,7 @@
 "use client";
 
 import { countWords, estSeconds, formatTime } from "@/lib/text";
+import { STORY_MODELS, type StoryModelId } from "@/lib/types";
 import { RefreshIcon, Spinner } from "./icons";
 
 export default function ScriptCard({
@@ -11,6 +12,8 @@ export default function ScriptCard({
   audioDuration,
   dirty,
   coreTurn,
+  scriptModel,
+  onScriptModelChange,
 }: {
   script: string;
   onChange: (value: string) => void;
@@ -19,6 +22,8 @@ export default function ScriptCard({
   audioDuration?: number;
   dirty?: boolean;
   coreTurn?: string;
+  scriptModel: StoryModelId;
+  onScriptModelChange: (id: StoryModelId) => void;
 }) {
   const words = countWords(script);
   const seconds = audioDuration ? audioDuration : estSeconds(script);
@@ -43,6 +48,29 @@ export default function ScriptCard({
             </>
           )}
         </button>
+      </div>
+
+      <div className="mt-3 flex items-center gap-2">
+        <span className="text-xs text-faint">Model</span>
+        <div className="flex gap-1.5">
+          {STORY_MODELS.map((m) => {
+            const active = m.id === scriptModel;
+            return (
+              <button
+                key={m.id}
+                type="button"
+                onClick={() => onScriptModelChange(m.id)}
+                disabled={regenerating}
+                title={m.blurb}
+                className={`btn !px-2.5 !py-1 !text-xs ${
+                  active ? "btn-ember" : "btn-ghost opacity-80"
+                }`}
+              >
+                {m.name}
+              </button>
+            );
+          })}
+        </div>
       </div>
 
       {coreTurn && (

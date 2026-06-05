@@ -3,6 +3,7 @@ import { generateStory } from "@/lib/anthropic";
 import { apiError } from "@/lib/http";
 import { getScriptStyle } from "@/lib/scriptStyles";
 import { recordAnthropicUsage } from "@/server/usage";
+import { STORY_MODELS } from "@/lib/types";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -12,6 +13,7 @@ export async function POST(req: Request) {
     const body = (await req.json()) as {
       redditText?: unknown;
       scriptStyleId?: unknown;
+      scriptModelId?: unknown;
       projectId?: unknown;
     };
     const redditText =
@@ -25,9 +27,14 @@ export async function POST(req: Request) {
     const style = getScriptStyle(
       typeof body.scriptStyleId === "string" ? body.scriptStyleId : undefined,
     );
+    // Only honor a model from the known allowlist; else fall back to the default.
+    const modelOverride = STORY_MODELS.some((m) => m.id === body.scriptModelId)
+      ? (body.scriptModelId as string)
+      : undefined;
     const { result, usage, model } = await generateStory(
       redditText,
       style.system,
+      modelOverride,
     );
     recordAnthropicUsage({
       projectId: typeof body.projectId === "string" ? body.projectId : null,

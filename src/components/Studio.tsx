@@ -22,10 +22,12 @@ import {
 import { formatClock, formatUsd } from "@/lib/text";
 import {
   DEFAULT_SCENE_MODEL_ID,
+  DEFAULT_STORY_MODEL_ID,
   SCENE_MODELS,
   type Project,
   type Scene,
   type SceneModelId,
+  type StoryModelId,
   type TtsModelId,
 } from "@/lib/types";
 import ScriptCard from "./ScriptCard";
@@ -46,6 +48,9 @@ export default function Studio({ projectId }: { projectId: string }) {
   const [voiceId, setVoiceId] = useState<string | undefined>();
   const [voiceName, setVoiceName] = useState<string | undefined>();
   const [model, setModel] = useState<TtsModelId>("eleven_multilingual_v2");
+  const [scriptModel, setScriptModel] = useState<StoryModelId>(
+    DEFAULT_STORY_MODEL_ID,
+  );
   const [sceneModel, setSceneModel] = useState<SceneModelId>(
     DEFAULT_SCENE_MODEL_ID,
   );
@@ -80,6 +85,7 @@ export default function Studio({ projectId }: { projectId: string }) {
       setVoiceId(p.voiceId);
       setVoiceName(p.voiceName);
       setModel((p.modelId as TtsModelId) ?? "eleven_multilingual_v2");
+      setScriptModel(p.scriptModelId ?? DEFAULT_STORY_MODEL_ID);
       setSceneModel(p.sceneModelId ?? DEFAULT_SCENE_MODEL_ID);
       setScenes(p.scenes ?? []);
       if (p.hasAudio) setAudioSrc(audioUrl(projectId, p.updatedAt));
@@ -144,6 +150,7 @@ export default function Studio({ projectId }: { projectId: string }) {
         body: JSON.stringify({
           redditText: project.redditText,
           scriptStyleId: project.scriptStyleId,
+          scriptModelId: scriptModel,
           projectId,
         }),
       });
@@ -242,6 +249,11 @@ export default function Studio({ projectId }: { projectId: string }) {
     } finally {
       setCutting(false);
     }
+  }
+
+  function handleScriptModelChange(id: StoryModelId) {
+    setScriptModel(id);
+    save((p) => ({ ...p, scriptModelId: id }));
   }
 
   function handleSceneModelChange(id: SceneModelId) {
@@ -378,6 +390,8 @@ export default function Studio({ projectId }: { projectId: string }) {
           audioDuration={project.audioDuration}
           dirty={scriptDirty}
           coreTurn={project.coreTurn}
+          scriptModel={scriptModel}
+          onScriptModelChange={handleScriptModelChange}
         />
 
         {script.trim() && (

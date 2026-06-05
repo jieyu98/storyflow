@@ -48,9 +48,11 @@ export type StoryResult = {
 export async function generateStory(
   redditText: string,
   system: string,
+  modelOverride?: string,
 ): Promise<{ result: StoryResult; usage: TokenUsage; model: string }> {
+  const model = modelOverride ?? ANTHROPIC_MODEL;
   const message = await client().messages.create({
-    model: ANTHROPIC_MODEL,
+    model,
     max_tokens: 2048,
     system: [{ type: "text", text: system, cache_control: { type: "ephemeral" } }],
     tools: [STORY_TOOL as unknown as Anthropic.Tool],
@@ -66,7 +68,7 @@ export async function generateStory(
     message,
     STORY_TOOL.name,
   ) as unknown as StoryResult;
-  return { result, usage: usageFromMessage(message), model: ANTHROPIC_MODEL };
+  return { result, usage: usageFromMessage(message), model };
 }
 
 function serializeBible(bible: VisualBible): string {
