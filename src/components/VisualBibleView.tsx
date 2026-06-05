@@ -3,19 +3,65 @@
 import { useState } from "react";
 import type { VisualBible } from "@/lib/types";
 import { composeReferencePrompt } from "@/lib/styles";
+import { imageUrl, type ImageScope } from "@/lib/storage";
 import CopyButton from "./CopyButton";
-import { ChevronDownIcon } from "./icons";
+import {
+  CheckIcon,
+  ChevronDownIcon,
+  ImageIcon,
+  Spinner,
+  TrashIcon,
+} from "./icons";
 
 export default function VisualBibleView({
   bible,
   styleId,
+  projectId,
+  images,
+  imageVersion,
+  refDoneIds,
+  onGenerateImage,
+  onDeleteImage,
+  onToggleRef,
 }: {
   bible: VisualBible;
   styleId: string;
+  projectId: string;
+  images: Set<string>;
+  imageVersion: number;
+  refDoneIds: string[];
+  onGenerateImage: (
+    scope: ImageScope,
+    key: string,
+    prompt: string,
+    referenceKeys?: string[],
+  ) => Promise<void>;
+  onDeleteImage: (scope: ImageScope, key: string) => Promise<void>;
+  onToggleRef: (id: string, done: boolean) => void;
 }) {
   const [open, setOpen] = useState(false);
-  const count = bible.characters.length + bible.locations.length;
+  const [busyId, setBusyId] = useState<string | null>(null);
+  const [error, setError] = useState<{ id: string; msg: string } | null>(null);
+
+  const entities = [...bible.characters, ...bible.locations];
+  const count = entities.length;
   if (count === 0) return null;
+
+  const done = entities.filter(
+    (e) => images.has(`ref:${e.id}`) || refDoneIds.includes(e.id),
+  ).length;
+
+  async function gen(id: string, prompt: string) {
+    setBusyId(id);
+    setError(null);
+    try {
+      await onGenerateImage("ref", id, prompt);
+    } catch (e) {
+      setError({ id, msg: e instanceof Error ? e.message : "Generation failed." });
+    } finally {
+      setBusyId(null);
+    }
+  }
 
   return (
     <section className="surface overflow-hidden">
@@ -28,7 +74,8 @@ export default function VisualBibleView({
           <span className="eyebrow">Visual bible</span>
           <span className="mt-0.5 block text-xs text-faint">
             {bible.characters.length} characters · {bible.locations.length}{" "}
-            locations — kept consistent across every frame
+            locations — kept consistent across every frame · {done}/{count}{" "}
+            generated
           </span>
         </span>
         <ChevronDownIcon
@@ -41,22 +88,41 @@ export default function VisualBibleView({
       {open && (
         <div className="border-t border-[var(--line)] px-5 py-5">
           <p className="mb-4 text-xs text-faint">
-            Generate each reference image once, then attach it as a reference in
-            every scene that lists it — that&rsquo;s what keeps people and objects
-            identical across separately generated frames.
+            Generate each reference once with Nano Banana — it&rsquo;s then reused
+            in every scene that entity appears in, which is what keeps people and
+            objects identical across separately generated frames. Or copy the
+            prompt to your own tool and tick it done.
           </p>
           <div className="grid gap-5 sm:grid-cols-2">
             <BibleColumn
               title="Characters"
               items={bible.characters}
-              styleId={styleId}
               kind="character"
+              styleId={styleId}
+              projectId={projectId}
+              images={images}
+              imageVersion={imageVersion}
+              refDoneIds={refDoneIds}
+              busyId={busyId}
+              error={error}
+              onGen={gen}
+              onDeleteImage={onDeleteImage}
+              onToggleRef={onToggleRef}
             />
             <BibleColumn
               title="Locations & objects"
               items={bible.locations}
-              styleId={styleId}
               kind="location"
+              styleId={styleId}
+              projectId={projectId}
+              images={images}
+              imageVersion={imageVersion}
+              refDoneIds={refDoneIds}
+              busyId={busyId}
+              error={error}
+              onGen={gen}
+              onDeleteImage={onDeleteImage}
+              onToggleRef={onToggleRef}
             />
           </div>
         </div>
@@ -68,13 +134,31 @@ export default function VisualBibleView({
 function BibleColumn({
   title,
   items,
-  styleId,
   kind,
+  styleId,
+  projectId,
+  images,
+  imageVersion,
+  refDoneIds,
+  busyId,
+  error,
+  onGen,
+  onDeleteImage,
+  onToggleRef,
 }: {
   title: string;
   items: { id: string; name: string; visualDescription: string }[];
-  styleId: string;
   kind: "character" | "location";
+  styleId: string;
+  projectId: string;
+  images: Set<string>;
+  imageVersion: number;
+  refDoneIds: string[];
+  busyId: string | null;
+  error: { id: string; msg: string } | null;
+  onGen: (id: string, prompt: string) => void;
+  onDeleteImage: (scope: ImageScope, key: string) => Promise<void>;
+  onToggleRef: (id: string, done: boolean) => void;
 }) {
   return (
     <div>
@@ -84,27 +168,91 @@ function BibleColumn({
       {items.length === 0 ? (
         <p className="text-xs text-faint">None</p>
       ) : (
-        <ul className="space-y-3">
-          {items.map((it) => (
-            <li key={it.id}>
-              <div className="flex items-center gap-2">
-                <span className="text-sm font-semibold text-cream">
-                  {it.name}
-                </span>
-                <span className="font-mono text-[0.62rem] text-faint">
-                  {it.id}
-                </span>
-                <CopyButton
-                  text={composeReferencePrompt(it, styleId, kind)}
-                  label="Reference prompt"
-                  className="ml-auto"
-                />
-              </div>
-              <p className="mt-0.5 text-xs leading-relaxed text-muted">
-                {it.visualDescription}
-              </p>
-            </li>
-          ))}
+        <ul className="space-y-4">
+          {items.map((it) => {
+            const hasImg = images.has(`ref:${it.id}`);
+            const manual = refDoneIds.includes(it.id);
+            const isDone = hasImg || manual;
+            const busy = busyId === it.id;
+            const prompt = composeReferencePrompt(it, styleId, kind);
+            return (
+              <li key={it.id} className="flex gap-3">
+                <div className="relative h-12 w-12 shrink-0 overflow-hidden rounded-md border border-[var(--line)] bg-ink-950/50">
+                  {hasImg ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                      src={imageUrl(projectId, "ref", it.id, imageVersion)}
+                      alt={it.name}
+                      className="h-full w-full object-cover"
+                    />
+                  ) : (
+                    <span className="flex h-full w-full items-center justify-center text-faint">
+                      <ImageIcon width={16} height={16} />
+                    </span>
+                  )}
+                  {isDone && (
+                    <span className="absolute right-0 top-0 flex h-4 w-4 items-center justify-center rounded-bl-md bg-mint-400/90 text-ink-950">
+                      <CheckIcon width={10} height={10} />
+                    </span>
+                  )}
+                </div>
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center gap-2">
+                    <span className="truncate text-sm font-semibold text-cream">
+                      {it.name}
+                    </span>
+                    <span className="font-mono text-[0.62rem] text-faint">
+                      {it.id}
+                    </span>
+                  </div>
+                  <p className="mt-0.5 text-xs leading-relaxed text-muted">
+                    {it.visualDescription}
+                  </p>
+                  <div className="mt-2 flex items-center gap-2">
+                    <CopyButton text={prompt} label="Prompt" />
+                    <button
+                      type="button"
+                      onClick={() => onGen(it.id, prompt)}
+                      disabled={busy}
+                      className="btn btn-ember !px-3 !py-1.5 !text-xs"
+                    >
+                      {busy ? (
+                        <>
+                          <Spinner width={13} height={13} /> Generating…
+                        </>
+                      ) : hasImg ? (
+                        "Regenerate"
+                      ) : (
+                        "Generate"
+                      )}
+                    </button>
+                    {hasImg ? (
+                      <button
+                        type="button"
+                        onClick={() => onDeleteImage("ref", it.id)}
+                        aria-label="Remove image"
+                        className="btn btn-ghost !px-2 !py-1.5 !text-xs"
+                      >
+                        <TrashIcon width={14} height={14} />
+                      </button>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => onToggleRef(it.id, !manual)}
+                        title="Mark done (if you generated it elsewhere)"
+                        className={`btn btn-ghost !px-2 !py-1.5 !text-xs ${manual ? "text-mint-400" : ""}`}
+                      >
+                        <CheckIcon width={14} height={14} />
+                      </button>
+                    )}
+                  </div>
+                  {error?.id === it.id && (
+                    <p className="mt-1 text-xs text-ember-300">{error.msg}</p>
+                  )}
+                </div>
+              </li>
+            );
+          })}
         </ul>
       )}
     </div>

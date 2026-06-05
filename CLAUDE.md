@@ -8,7 +8,7 @@ voiceover, and per-scene image + animation prompts.
 
 **Product boundary:** the app's core output is **text + the voiceover mp3**. It
 can now also generate media **in-app**, each gated behind its own key and an
-explicit user action (the Automate stepper / scene cards):
+explicit user action (the Visual bible / scene cards):
 - **Still images** via Gemini ("Nano Banana") — `GEMINI_API_KEY`.
 - **Video clips** via Grok image-to-video ("Grok Imagine") — `XAI_API_KEY`:
   animates a scene's generated starting frame into its clip.
@@ -38,7 +38,8 @@ asking.**
 4. **Generate images** (`/api/projects/[id]/images/generate` → Gemini, optional).
    `src/lib/gemini.ts` calls Nano Banana with a prompt (+ any reference images as
    `inlineData` for consistency) and stores the result in the `images` table
-   (`scope` `ref`|`scene`). Driven by the Automate stepper; needs `GEMINI_API_KEY`.
+   (`scope` `ref`|`scene`). Driven by the Visual bible (refs) and scene cards
+   (scene frames); needs `GEMINI_API_KEY`.
 5. **Generate clips** (`/api/projects/[id]/clips/[index]/generate` → Grok,
    optional). `src/lib/grok.ts` animates the scene's generated starting frame
    (inlined as a base64 data URI) with its animation prompt via the **async** xAI
@@ -114,19 +115,21 @@ So Claude is called in steps 1 and 3; ElevenLabs only in step 2; Gemini in step 
   `[id]/clips` (list) + `[id]/clips/[index]` GET/PUT/DELETE +
   `[id]/clips/[index]/generate` (POST → Grok), and `[id]/images` (list) +
   `[id]/images/generate` (POST) + `[id]/images/[scope]/[key]` GET/DELETE.
-- `src/components/Automate.tsx` — the **Automate stepper** shown under the script:
-  a guided, ordered walk through the pipeline (voiceover → scenes → reference
-  images → per scene). The **reference-images** step generates each bible
-  entity's image with Nano Banana (or copy the prompt / tick `Project.refDoneIds`
-  to do it manually). Per-scene steps reuse `SceneCard`, which now also has a
-  **Generate** button for the scene's 9:16 starting frame — it passes that scene's
-  `characterIds`/`locationIds` reference images (the ones already generated) to
-  Gemini for cross-shot consistency. Each scene can then **generate its clip** via
-  Grok (image-to-video off the starting frame) or take an uploaded clip.
+- `src/components/Automate.tsx` — a slim **progress readout** shown under the
+  script: a progress bar + one-line status across the four stages (voiceover,
+  scenes, references, clips). It performs **no** actions — each stage is done in
+  its own section below (Voiceover, Scenes, Visual bible, Scene list); this is
+  just an at-a-glance "where am I". Read-only, so it only takes data props.
+- `src/components/VisualBibleView.tsx` — the collapsible **Visual bible**: each
+  character/location's description + reference prompt, and the in-app
+  **reference-image generation** (Nano Banana `Generate`/`Regenerate`/delete, or
+  copy the prompt / tick `Project.refDoneIds` to do it manually). Generate each
+  reference once; it's then reused in every scene that entity appears in.
 - `src/components/SceneCard.tsx` — per-scene card: prompts, recipe, optional
-  in-app starting-frame generation (`onGenerateImage`) and clip generation
-  (`onGenerateClip` → Grok, enabled once the frame exists), and the clip drop.
-  Used by both the stepper and `SceneList`.
+  in-app starting-frame generation (`onGenerateImage`, passing that scene's
+  `characterIds`/`locationIds` reference images to Gemini for cross-shot
+  consistency) and clip generation (`onGenerateClip` → Grok, enabled once the
+  frame exists), and the clip drop. Rendered by `SceneList`.
 - `src/lib/grok.ts` — `generateVideoAndWait`: submit + poll the async xAI video
   API, return the finished mp4 url. `GROK_VIDEO_MODEL` in `src/server/env.ts`;
   gated behind `XAI_API_KEY`. The only place the app generates video.

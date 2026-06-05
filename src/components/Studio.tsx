@@ -341,30 +341,23 @@ export default function Studio({ projectId }: { projectId: string }) {
             scriptDirty={scriptDirty}
             scenes={scenes}
             clips={clips}
-            clipVersion={clipVersion}
-            projectId={projectId}
             bible={project.visualBible}
-            styleId={project.stylePresetId}
-            conceptStyleId={project.conceptStylePresetId}
-            voicing={voicing}
-            canVoice={Boolean(voiceId && script.trim())}
-            onGenerateVoiceover={handleVoiceover}
-            cutting={cutting}
-            canCutScenes={words.length > 0}
-            onGenerateScenes={handleGenerateScenes}
-            onClipChange={handleClipChange}
-            onPreviewScene={handlePreviewScene}
-            refDoneIds={project.refDoneIds ?? []}
-            onToggleRef={handleToggleRef}
             images={images}
-            imageVersion={imageVersion}
-            onGenerateImage={handleGenerateImage}
-            onDeleteImage={handleDeleteImage}
-            onGenerateClip={handleGenerateClip}
+            refDoneIds={project.refDoneIds ?? []}
           />
         )}
 
-        <VisualBibleView bible={project.visualBible} styleId={project.stylePresetId} />
+        <VisualBibleView
+          bible={project.visualBible}
+          styleId={project.stylePresetId}
+          projectId={projectId}
+          images={images}
+          imageVersion={imageVersion}
+          refDoneIds={project.refDoneIds ?? []}
+          onGenerateImage={handleGenerateImage}
+          onDeleteImage={handleDeleteImage}
+          onToggleRef={handleToggleRef}
+        />
 
         <div className="grid gap-4 lg:grid-cols-2">
           {/* Voiceover */}
