@@ -46,6 +46,23 @@ function db(): Database.Database {
       updated_at INTEGER,
       PRIMARY KEY (project_id, scope, key)
     );
+    -- One row per billed API call. project_id is nullable (the first story call
+    -- happens before the project is persisted). Rows survive project deletion so
+    -- the global spend total stays accurate.
+    CREATE TABLE IF NOT EXISTS usage (
+      id                 INTEGER PRIMARY KEY AUTOINCREMENT,
+      created_at         INTEGER NOT NULL,
+      project_id         TEXT,
+      provider           TEXT NOT NULL,   -- 'anthropic' | 'elevenlabs' | 'gemini' | 'grok'
+      model              TEXT NOT NULL,
+      operation          TEXT NOT NULL,   -- 'story' | 'scenes' | …
+      input_tokens       INTEGER NOT NULL DEFAULT 0,
+      output_tokens      INTEGER NOT NULL DEFAULT 0,
+      cache_write_tokens INTEGER NOT NULL DEFAULT 0,
+      cache_read_tokens  INTEGER NOT NULL DEFAULT 0,
+      cost_usd           REAL NOT NULL DEFAULT 0
+    );
+    CREATE INDEX IF NOT EXISTS idx_usage_project ON usage (project_id);
   `);
   globalForDb.__storyflowDb = conn;
   return conn;
@@ -218,4 +235,82 @@ export function listImageKeys(
     )
     .all(projectId) as { scope: string; key: string }[];
   return rows;
+}
+
+/* -------------------------------- usage ---------------------------------- */
+
+export type UsageEntry = {
+  projectId?: string | null;
+  provider: string;
+  model: string;
+  operation: string;
+  inputTokens: number;
+  outputTokens: number;
+  cacheWriteTokens: number;
+  cacheReadTokens: number;
+  costUsd: number;
+};
+
+export function recordUsage(e: UsageEntry): void {
+  db()
+    .prepare(
+      `INSERT INTO usage (
+         created_at, project_id, provider, model, operation,
+         input_tokens, output_tokens, cache_write_tokens, cache_read_tokens, cost_usd
+       ) VALUES (
+         @created_at, @project_id, @provider, @model, @operation,
+         @input_tokens, @output_tokens, @cache_write_tokens, @cache_read_tokens, @cost_usd
+       )`,
+    )
+    .run({
+      created_at: Date.now(),
+      project_id: e.projectId ?? null,
+      provider: e.provider,
+      model: e.model,
+      operation: e.operation,
+      input_tokens: e.inputTokens,
+      output_tokens: e.outputTokens,
+      cache_write_tokens: e.cacheWriteTokens,
+      cache_read_tokens: e.cacheReadTokens,
+      cost_usd: e.costUsd,
+    });
+}
+
+export type UsageSummary = {
+  totalUsd: number;
+  calls: number;
+  byOperation: Record<string, { usd: number; calls: number }>;
+  byModel: Record<string, { usd: number; calls: number }>;
+};
+
+/** Aggregate spend; pass a projectId to scope it to one project. */
+export function usageSummary(projectId?: string): UsageSummary {
+  const where = projectId ? "WHERE project_id = ?" : "";
+  const params = projectId ? [projectId] : [];
+  const conn = db();
+
+  const total = conn
+    .prepare(
+      `SELECT COALESCE(SUM(cost_usd), 0) AS usd, COUNT(*) AS calls FROM usage ${where}`,
+    )
+    .get(...params) as { usd: number; calls: number };
+
+  const group = (col: "operation" | "model") => {
+    const rows = conn
+      .prepare(
+        `SELECT ${col} AS k, SUM(cost_usd) AS usd, COUNT(*) AS calls
+           FROM usage ${where} GROUP BY ${col}`,
+      )
+      .all(...params) as { k: string; usd: number; calls: number }[];
+    return Object.fromEntries(
+      rows.map((r) => [r.k, { usd: r.usd, calls: r.calls }]),
+    );
+  };
+
+  return {
+    totalUsd: total.usd,
+    calls: total.calls,
+    byOperation: group("operation"),
+    byModel: group("model"),
+  };
 }

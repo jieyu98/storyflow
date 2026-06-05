@@ -44,6 +44,34 @@ export function newProjectId(): string {
   return `p_${Date.now()}_${Math.floor(Math.random() * 1e6)}`;
 }
 
+/* --------------------------------- usage --------------------------------- */
+
+export type UsageSummary = {
+  totalUsd: number;
+  calls: number;
+  byOperation: Record<string, { usd: number; calls: number }>;
+  byModel: Record<string, { usd: number; calls: number }>;
+};
+
+const EMPTY_USAGE: UsageSummary = {
+  totalUsd: 0,
+  calls: 0,
+  byOperation: {},
+  byModel: {},
+};
+
+/** Spend summary; pass a projectId to scope it to one project. */
+export async function getUsage(projectId?: string): Promise<UsageSummary> {
+  try {
+    const qs = projectId ? `?projectId=${encodeURIComponent(projectId)}` : "";
+    const res = await fetch(`/api/usage${qs}`);
+    if (!res.ok) return EMPTY_USAGE;
+    return (await res.json()) as UsageSummary;
+  } catch {
+    return EMPTY_USAGE;
+  }
+}
+
 /* --------------------------------- audio --------------------------------- */
 
 export async function saveAudio(

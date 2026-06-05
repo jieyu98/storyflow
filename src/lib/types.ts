@@ -84,6 +84,8 @@ export type Project = {
   stylePresetId: string;
   /** Art-style for "concept" scenes (explainer diagrams); falls back to stylePresetId. */
   conceptStylePresetId?: string;
+  /** Claude model used to cut scenes (see SCENE_MODELS); falls back to the server default. */
+  sceneModelId?: SceneModelId;
   voiceId?: string;
   voiceName?: string;
   modelId?: string;
@@ -107,6 +109,38 @@ export type VoiceOption = {
   preview_url?: string | null;
   labels?: Record<string, string>;
 };
+
+/** Claude models offered for scene cutting (`/api/scenes`). */
+export type SceneModelId =
+  | "claude-sonnet-4-6"
+  | "claude-opus-4-8"
+  | "claude-haiku-4-5-20251001";
+
+export type SceneModelOption = {
+  id: SceneModelId;
+  name: string;
+  blurb: string;
+};
+
+export const SCENE_MODELS: SceneModelOption[] = [
+  {
+    id: "claude-sonnet-4-6",
+    name: "Sonnet 4.6",
+    blurb: "Balanced quality and speed. Default.",
+  },
+  {
+    id: "claude-opus-4-8",
+    name: "Opus 4.8",
+    blurb: "Best reasoning — sharper beat cuts. Slower.",
+  },
+  {
+    id: "claude-haiku-4-5-20251001",
+    name: "Haiku 4.5",
+    blurb: "Fastest and cheapest.",
+  },
+];
+
+export const DEFAULT_SCENE_MODEL_ID: SceneModelId = "claude-sonnet-4-6";
 
 /** TTS model options that reliably return word/character alignment. */
 export type TtsModelId = "eleven_multilingual_v2" | "eleven_flash_v2_5";

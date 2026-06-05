@@ -13,13 +13,14 @@ import {
 } from "@/lib/scriptStyles";
 import {
   deleteProject,
+  getUsage,
   listProjects,
   migrateLegacy,
   newProjectId,
   upsertProject,
 } from "@/lib/storage";
 import { type Project } from "@/lib/types";
-import { countWords } from "@/lib/text";
+import { countWords, formatUsd } from "@/lib/text";
 
 export default function HomePage() {
   const router = useRouter();
@@ -29,6 +30,7 @@ export default function HomePage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [projects, setProjects] = useState<Project[]>([]);
+  const [claudeUsd, setClaudeUsd] = useState(0);
 
   const scriptStyleOptions: PresetOption[] = useMemo(
     () => SCRIPT_STYLES.map((s) => ({ id: s.id, name: s.name, sub: s.tagline })),
@@ -48,23 +50,27 @@ export default function HomePage() {
 
   useEffect(() => {
     migrateLegacy().then(() => listProjects().then(setProjects));
+    void getUsage().then((u) => setClaudeUsd(u.totalUsd));
   }, []);
 
   async function handleGenerate() {
     setError(null);
     setLoading(true);
     try {
+      // Mint the id up front so the (billed) story call is attributed to this
+      // project, even though the project row is saved after the response.
+      const id = newProjectId();
       const res = await fetch("/api/story", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ redditText: text, scriptStyleId }),
+        body: JSON.stringify({ redditText: text, scriptStyleId, projectId: id }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? "Could not write the script.");
 
       const now = Date.now();
       const project: Project = {
-        id: newProjectId(),
+        id,
         title: data.title || "Untitled story",
         createdAt: now,
         updatedAt: now,
@@ -201,6 +207,11 @@ export default function HomePage() {
         <div className="mb-4 flex items-baseline justify-between">
           <h2 className="font-display text-xl font-semibold">Your studio</h2>
           <span className="text-xs text-faint">
+            {claudeUsd > 0 && (
+              <span title="Total Claude API spend across all projects">
+                Claude spend {formatUsd(claudeUsd)} ·{" "}
+              </span>
+            )}
             {projects.length} {projects.length === 1 ? "draft" : "drafts"}
           </span>
         </div>

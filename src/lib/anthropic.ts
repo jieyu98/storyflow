@@ -2,10 +2,22 @@ import Anthropic from "@anthropic-ai/sdk";
 import { ANTHROPIC_MODEL, serverEnv } from "@/server/env";
 import { SCENE_SYSTEM, SCENE_TOOL, STORY_TOOL } from "./prompts";
 import { numberedWords, type SceneBeat } from "./scenes";
+import type { TokenUsage } from "./pricing";
 import type { VisualBible, Word } from "./types";
 
 function client(): Anthropic {
   return new Anthropic({ apiKey: serverEnv.ANTHROPIC_API_KEY });
+}
+
+/** Normalize the SDK usage block into our token-usage shape. */
+function usageFromMessage(m: Anthropic.Message): TokenUsage {
+  const u = m.usage;
+  return {
+    inputTokens: u.input_tokens ?? 0,
+    outputTokens: u.output_tokens ?? 0,
+    cacheWriteTokens: u.cache_creation_input_tokens ?? 0,
+    cacheReadTokens: u.cache_read_input_tokens ?? 0,
+  };
 }
 
 function extractToolInput(
@@ -32,7 +44,7 @@ export type StoryResult = {
 export async function generateStory(
   redditText: string,
   system: string,
-): Promise<StoryResult> {
+): Promise<{ result: StoryResult; usage: TokenUsage; model: string }> {
   const message = await client().messages.create({
     model: ANTHROPIC_MODEL,
     max_tokens: 2048,
@@ -46,7 +58,11 @@ export async function generateStory(
       },
     ],
   });
-  return extractToolInput(message, STORY_TOOL.name) as unknown as StoryResult;
+  const result = extractToolInput(
+    message,
+    STORY_TOOL.name,
+  ) as unknown as StoryResult;
+  return { result, usage: usageFromMessage(message), model: ANTHROPIC_MODEL };
 }
 
 function serializeBible(bible: VisualBible): string {
@@ -65,8 +81,14 @@ export async function generateSceneBeats(
   words: Word[],
   bible: VisualBible,
   maxSeconds: number,
-  opts: { title?: string; coreTurn?: string; system?: string } = {},
-): Promise<SceneBeat[]> {
+  opts: {
+    title?: string;
+    coreTurn?: string;
+    system?: string;
+    model?: string;
+  } = {},
+): Promise<{ beats: SceneBeat[]; usage: TokenUsage; model: string }> {
+  const model = opts.model ?? ANTHROPIC_MODEL;
   const userContent = `Hard maximum clip length: ${maxSeconds} seconds. Choose each beat's length yourself from its content and pacing — keep most beats short, and only approach this maximum when a beat genuinely needs a long, sustained hold.
 
 STORY
@@ -80,7 +102,7 @@ NARRATION (numbered words; each tagged with the second it ends)
 ${numberedWords(words)}`;
 
   const message = await client().messages.create({
-    model: ANTHROPIC_MODEL,
+    model,
     // Many short beats × two prompts each — needs plenty of headroom or the
     // tool JSON truncates (stop_reason: max_tokens) and parses to nothing.
     max_tokens: 16000,
@@ -105,5 +127,5 @@ ${numberedWords(words)}`;
   const input = extractToolInput(message, SCENE_TOOL.name) as unknown as {
     scenes?: SceneBeat[];
   };
-  return input.scenes ?? [];
+  return { beats: input.scenes ?? [], usage: usageFromMessage(message), model };
 }

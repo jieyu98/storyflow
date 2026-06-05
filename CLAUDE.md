@@ -110,7 +110,16 @@ So Claude is called in steps 1 and 3; ElevenLabs only in step 2; Gemini in step 
 - `src/server/db.ts` — **server** SQLite (better-sqlite3) at `.data/storyflow.db`:
   `projects` (Project JSON) + `audio` (mp3 BLOB) + `clips` (per-scene video BLOB,
   uploaded or Grok-generated) + `images` (generated stills BLOB, keyed by
-  `scope`/`key`).
+  `scope`/`key`) + `usage` (one row per billed API call: provider/model/operation
+  + tokens + `cost_usd`; nullable `project_id`, kept even after the project is
+  deleted). `recordUsage` / `usageSummary(projectId?)`.
+- **Cost tracking** — `src/lib/pricing.ts` (`anthropicCost`: pure, cache-aware
+  USD/MTok rates — edit when Anthropic pricing changes) → `src/server/usage.ts`
+  (`recordAnthropicUsage`: prices + logs, never throws) called from the `/api/story`
+  and `/api/scenes` handlers. `GET /api/usage[?projectId=]` returns a spend summary
+  (`totalUsd`, `byOperation`, `byModel`); the studio shows a per-project Claude
+  chip and the home page a global total. Both Claude calls return `{…, usage,
+  model }`; only Claude is metered so far.
 - `src/app/api/projects/*` — project CRUD, `[id]/audio` GET/PUT,
   `[id]/clips` (list) + `[id]/clips/[index]` GET/PUT/DELETE +
   `[id]/clips/[index]/generate` (POST → Grok), and `[id]/images` (list) +

@@ -12,14 +12,22 @@ import {
   generateClip,
   generateImage,
   getProject,
+  getUsage,
   listClips,
   listImages,
   saveAudio,
   upsertProject,
   type ImageScope,
 } from "@/lib/storage";
-import { formatClock } from "@/lib/text";
-import { type Project, type Scene, type TtsModelId } from "@/lib/types";
+import { formatClock, formatUsd } from "@/lib/text";
+import {
+  DEFAULT_SCENE_MODEL_ID,
+  SCENE_MODELS,
+  type Project,
+  type Scene,
+  type SceneModelId,
+  type TtsModelId,
+} from "@/lib/types";
 import ScriptCard from "./ScriptCard";
 import VisualBibleView from "./VisualBibleView";
 import VoicePicker from "./VoicePicker";
@@ -38,12 +46,16 @@ export default function Studio({ projectId }: { projectId: string }) {
   const [voiceId, setVoiceId] = useState<string | undefined>();
   const [voiceName, setVoiceName] = useState<string | undefined>();
   const [model, setModel] = useState<TtsModelId>("eleven_multilingual_v2");
+  const [sceneModel, setSceneModel] = useState<SceneModelId>(
+    DEFAULT_SCENE_MODEL_ID,
+  );
   const [scenes, setScenes] = useState<Scene[]>([]);
   const [audioSrc, setAudioSrc] = useState<string | null>(null);
   const [clips, setClips] = useState<Set<number>>(new Set());
   const [clipVersion, setClipVersion] = useState(0);
   const [images, setImages] = useState<Set<string>>(new Set());
   const [imageVersion, setImageVersion] = useState(0);
+  const [claudeUsd, setClaudeUsd] = useState(0);
   const [seekReq, setSeekReq] = useState<{ t: number; n: number } | null>(null);
   const previewRef = useRef<HTMLElement>(null);
 
@@ -68,6 +80,7 @@ export default function Studio({ projectId }: { projectId: string }) {
       setVoiceId(p.voiceId);
       setVoiceName(p.voiceName);
       setModel((p.modelId as TtsModelId) ?? "eleven_multilingual_v2");
+      setSceneModel(p.sceneModelId ?? DEFAULT_SCENE_MODEL_ID);
       setScenes(p.scenes ?? []);
       if (p.hasAudio) setAudioSrc(audioUrl(projectId, p.updatedAt));
       void listClips(projectId).then((list) => {
@@ -76,11 +89,19 @@ export default function Studio({ projectId }: { projectId: string }) {
       void listImages(projectId).then((keys) => {
         if (!cancelled) setImages(new Set(keys));
       });
+      void getUsage(projectId).then((u) => {
+        if (!cancelled) setClaudeUsd(u.totalUsd);
+      });
     });
     return () => {
       cancelled = true;
     };
   }, [projectId]);
+
+  // Re-read this project's spend after a billed Claude call (script / scenes).
+  function refreshUsage() {
+    void getUsage(projectId).then((u) => setClaudeUsd(u.totalUsd));
+  }
 
   function save(mutate: (p: Project) => Project) {
     const cur = projectRef.current;
@@ -123,6 +144,7 @@ export default function Studio({ projectId }: { projectId: string }) {
         body: JSON.stringify({
           redditText: project.redditText,
           scriptStyleId: project.scriptStyleId,
+          projectId,
         }),
       });
       const data = await res.json();
@@ -134,6 +156,7 @@ export default function Studio({ projectId }: { projectId: string }) {
         coreTurn: data.coreTurn || undefined,
         visualBible: data.visualBible ?? p.visualBible,
       }));
+      refreshUsage();
     } catch (e) {
       setError(e instanceof Error ? e.message : "Could not rewrite.");
     } finally {
@@ -194,6 +217,8 @@ export default function Studio({ projectId }: { projectId: string }) {
           title: project.title,
           coreTurn: project.coreTurn,
           scriptStyleId: project.scriptStyleId,
+          sceneModelId: sceneModel,
+          projectId,
         }),
       });
       const data = await res.json();
@@ -205,11 +230,17 @@ export default function Studio({ projectId }: { projectId: string }) {
       setClipVersion((v) => v + 1);
       setScenes(next);
       save((p) => ({ ...p, scenes: next }));
+      refreshUsage();
     } catch (e) {
       setError(e instanceof Error ? e.message : "Could not cut scenes.");
     } finally {
       setCutting(false);
     }
+  }
+
+  function handleSceneModelChange(id: SceneModelId) {
+    setSceneModel(id);
+    save((p) => ({ ...p, sceneModelId: id }));
   }
 
   function handleClipChange(index: number, has: boolean) {
@@ -316,6 +347,14 @@ export default function Studio({ projectId }: { projectId: string }) {
           className="min-w-0 flex-1 truncate rounded-lg bg-transparent font-display text-lg font-semibold text-cream outline-none focus:bg-white/5 focus:px-2"
           aria-label="Story title"
         />
+        {claudeUsd > 0 && (
+          <span
+            className="chip shrink-0"
+            title="Claude API spend for this project (script + scenes)"
+          >
+            Claude {formatUsd(claudeUsd)}
+          </span>
+        )}
       </header>
 
       {error && (
@@ -431,6 +470,29 @@ export default function Studio({ projectId }: { projectId: string }) {
                   ` ${scenes.length} beats · ${formatClock(coverage.totalSpoken)} voiceover.`}
               </p>
             )}
+
+            <div>
+              <p className="eyebrow mb-2">Model</p>
+              <div className="grid grid-cols-3 gap-2">
+                {SCENE_MODELS.map((m) => {
+                  const active = m.id === sceneModel;
+                  return (
+                    <button
+                      key={m.id}
+                      type="button"
+                      onClick={() => handleSceneModelChange(m.id)}
+                      disabled={cutting}
+                      title={m.blurb}
+                      className={`btn !px-3 !py-2 !text-xs ${
+                        active ? "btn-ember" : "btn-ghost opacity-80"
+                      }`}
+                    >
+                      {m.name}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
 
             <button
               type="button"
