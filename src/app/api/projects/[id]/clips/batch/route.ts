@@ -53,6 +53,7 @@ export async function POST(req: Request, { params }: Ctx) {
 
     // Only scenes that already have a master starting frame can be animated.
     const reqs: VideoBatchRequest[] = [];
+    const sceneIndices: number[] = []; // real 0-based index, parallel to reqs
     const skipped: number[] = [];
     for (const s of scenes) {
       const frame = getImage(id, "scene", String(s.index));
@@ -61,12 +62,15 @@ export async function POST(req: Request, { params }: Ctx) {
         continue;
       }
       reqs.push({
-        batchRequestId: `scene-${s.index}`,
+        // Label by the DISPLAYED (1-based) scene number so the xAI dashboard's
+        // batch_request_id matches what the user sees in the app.
+        batchRequestId: `scene-${s.index + 1}`,
         prompt: s.prompt.trim(),
         image: `data:${frame.mime};base64,${frame.data.toString("base64")}`,
         duration: s.duration,
         aspectRatio: s.aspectRatio ?? "9:16",
       });
+      sceneIndices.push(s.index);
     }
     if (reqs.length === 0) {
       return NextResponse.json(
@@ -82,8 +86,8 @@ export async function POST(req: Request, { params }: Ctx) {
       batchId,
       createdAt: Date.now(),
       status: "open",
-      requests: reqs.map((r) => ({
-        sceneIndex: Number(r.batchRequestId.slice("scene-".length)),
+      requests: reqs.map((r, i) => ({
+        sceneIndex: sceneIndices[i], // real index, decoupled from the label
         batchRequestId: r.batchRequestId,
         state: "pending",
       })),

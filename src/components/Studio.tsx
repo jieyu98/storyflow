@@ -11,6 +11,7 @@ import {
   deleteAllClips,
   deleteAllImages,
   deleteImage,
+  generateCaptionEmphasis,
   generateClip,
   generateImage,
   getClipBatch,
@@ -21,6 +22,7 @@ import {
   saveAudio,
   upsertProject,
   type ImageScope,
+  type UsageSummary,
 } from "@/lib/storage";
 import { formatClock, formatUsd } from "@/lib/text";
 import {
@@ -43,6 +45,7 @@ import VoiceoverPlayer from "./VoiceoverPlayer";
 import SceneList from "./SceneList";
 import ClipBatchPanel from "./ClipBatchPanel";
 import PreviewPlayer from "./PreviewPlayer";
+import RenderPanel from "./RenderPanel";
 import Automate from "./Automate";
 import {
   ArrowIcon,
@@ -52,6 +55,14 @@ import {
   SparkIcon,
   Spinner,
 } from "./icons";
+
+// Friendly names for the per-provider spend breakdown chip.
+const PROVIDER_LABELS: Record<string, string> = {
+  anthropic: "Claude",
+  grok: "Grok",
+  gemini: "Gemini",
+  elevenlabs: "ElevenLabs",
+};
 
 export default function Studio({ projectId }: { projectId: string }) {
   const [project, setProject] = useState<Project | null | undefined>(undefined);
@@ -75,7 +86,7 @@ export default function Studio({ projectId }: { projectId: string }) {
   const [clipBatch, setClipBatch] = useState<ClipBatch | null>(null);
   const [images, setImages] = useState<Set<string>>(new Set());
   const [imageVersion, setImageVersion] = useState(0);
-  const [claudeUsd, setClaudeUsd] = useState(0);
+  const [usage, setUsage] = useState<UsageSummary | null>(null);
   const [seekReq, setSeekReq] = useState<{ t: number; n: number } | null>(null);
   const previewRef = useRef<HTMLElement>(null);
 
@@ -114,7 +125,7 @@ export default function Studio({ projectId }: { projectId: string }) {
         if (!cancelled) setImages(new Set(keys));
       });
       void getUsage(projectId).then((u) => {
-        if (!cancelled) setClaudeUsd(u.totalUsd);
+        if (!cancelled) setUsage(u);
       });
     });
     return () => {
@@ -122,9 +133,9 @@ export default function Studio({ projectId }: { projectId: string }) {
     };
   }, [projectId]);
 
-  // Re-read this project's spend after a billed Claude call (script / scenes).
+  // Re-read this project's spend after a billed call (script / scenes / clips).
   function refreshUsage() {
-    void getUsage(projectId).then((u) => setClaudeUsd(u.totalUsd));
+    void getUsage(projectId).then((u) => setUsage(u));
   }
 
   function save(mutate: (p: Project) => Project) {
@@ -220,6 +231,7 @@ export default function Studio({ projectId }: { projectId: string }) {
         modelId: model,
         hasAudio: true,
         scenes: [],
+        captionEmphasis: undefined, // word indices changed → re-pick emphasis
       }));
     } catch (e) {
       setError(e instanceof Error ? e.message : "Voiceover failed.");
@@ -302,6 +314,14 @@ export default function Studio({ projectId }: { projectId: string }) {
       return next;
     });
     setClipVersion((v) => v + 1);
+  }
+
+  // Let Claude pick which caption words to emphasize; persist the indices so the
+  // preview + render highlight them. Billed Claude call → refresh the spend chip.
+  async function handleGenerateEmphasis() {
+    const indices = await generateCaptionEmphasis(projectId);
+    save((p) => ({ ...p, captionEmphasis: indices }));
+    refreshUsage();
   }
 
   // The clip-batch poller saved some clips server-side — reflect them in the UI.
@@ -417,12 +437,21 @@ export default function Studio({ projectId }: { projectId: string }) {
           className="min-w-0 flex-1 truncate rounded-lg bg-transparent font-display text-lg font-semibold text-cream outline-none focus:bg-white/5 focus:px-2"
           aria-label="Story title"
         />
-        {claudeUsd > 0 && (
+        {usage && usage.totalUsd > 0 && (
           <span
             className="chip shrink-0"
-            title="Claude API spend for this project (script + scenes)"
+            title="Total API spend for this project (Gemini image generation is not metered)"
           >
-            Claude {formatUsd(claudeUsd)}
+            Spend {formatUsd(usage.totalUsd)}
+            <span className="ml-1.5 text-faint">
+              {Object.entries(usage.byProvider)
+                .sort((a, b) => b[1].usd - a[1].usd)
+                .map(
+                  ([k, v]) =>
+                    `${PROVIDER_LABELS[k] ?? k} ${formatUsd(v.usd)}`,
+                )
+                .join("  ·  ")}
+            </span>
           </span>
         )}
       </header>
@@ -642,12 +671,30 @@ export default function Studio({ projectId }: { projectId: string }) {
               clipVersion={clipVersion}
               duration={project.audioDuration}
               seekReq={seekReq}
+              captions={words}
+              showCaptions={project.renderCaptions ?? true}
+              emphasis={project.captionEmphasis ?? []}
             />
             <p className="mx-auto mt-3 max-w-sm text-center text-xs text-faint">
               Drop a clip onto each scene below — they play in order under your
               voiceover. Empty scenes show a placeholder.
             </p>
           </section>
+        )}
+
+        {scenes.length > 0 && audioSrc && (
+          <RenderPanel
+            projectId={projectId}
+            sceneCount={scenes.length}
+            clipCount={clips.size}
+            hasAudio={Boolean(audioSrc)}
+            captions={project.renderCaptions ?? true}
+            onCaptionsChange={(on) =>
+              save((p) => ({ ...p, renderCaptions: on }))
+            }
+            emphasisCount={project.captionEmphasis?.length ?? 0}
+            onGenerateEmphasis={handleGenerateEmphasis}
+          />
         )}
 
         {scenes.length > 0 && (

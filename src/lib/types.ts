@@ -109,6 +109,10 @@ export type Project = {
   scenes?: Scene[];
   /** Bible entity ids whose reference image the user has marked generated (Automate stepper). */
   refDoneIds?: string[];
+  /** Burn karaoke captions into the in-app render (default on when undefined). */
+  renderCaptions?: boolean;
+  /** Word indices (into the alignment word list) Claude chose to emphasize. */
+  captionEmphasis?: number[];
 };
 
 /* ---------------------------- clip batch (Grok) --------------------------- */

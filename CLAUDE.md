@@ -13,6 +13,11 @@ explicit user action (the Visual bible / scene cards):
 - **Video clips** via Grok image-to-video ("Grok Imagine") — `XAI_API_KEY`:
   animates a scene's generated starting frame into its clip.
 
+It can also **render the final 9:16 MP4 in-app** (clips + voiceover + optional
+karaoke captions) via a local Remotion render — **local compute, no external API,
+not metered**, gated on every scene having a clip + an explicit action. The
+preview and the render share ONE composition, so the preview is WYSIWYG.
+
 The **manual workflow stays first-class**: with no keys, you copy the prompts into
 your own image tool and upload your own clips, and everything still works.
 **Don't wire up a new external media API, or expand what's generated, without
@@ -173,13 +178,33 @@ So Claude is called in steps 1 and 3; ElevenLabs only in step 2; Gemini in step 
   API, return the finished mp4 url. `GROK_VIDEO_MODEL` in `src/server/env.ts`;
   gated behind `XAI_API_KEY`. The only place the app generates video.
 - `src/components/ClipDrop.tsx` — per-scene clip upload (drag/drop → `/clips`).
-- `src/components/PreviewPlayer.tsx` + `src/remotion/PreviewComposition.tsx` — the
-  9:16 preview. It is a **Remotion `<Player>`** (a player, NOT a renderer — no
-  video export, stays within the product boundary) driving a composition that
-  sequences each scene's clip under the voiceover by real timing and shows a
-  placeholder for clip-less scenes. `PreviewPlayer`
-  runs the Player headless and keeps the campfire-styled controls + a full-width
-  per-scene timeline.
+- `src/remotion/PreviewComposition.tsx` — the 9:16 composition, **shared** by the
+  `<Player>` (preview) and the `@remotion/renderer` export. Sequences each scene's
+  clip under the voiceover by real timing, placeholder for clip-less scenes, and an
+  optional **karaoke caption overlay** (active word highlighted, driven by
+  `useCurrentFrame()` + the `captions: Word[]` prop; font via `@remotion/google-fonts`
+  since Next's `var(--font-*)` don't exist in the render bundle). `baseUrl` is `""`
+  in the Player (relative URLs) and the absolute dev origin in the render (so the
+  headless browser can reach clip/audio routes).
+- `src/components/PreviewPlayer.tsx` — runs the Remotion `<Player>` headless with the
+  campfire controls + per-scene timeline; passes `captions`/`showCaptions` so the
+  preview matches the render WYSIWYG.
+- `src/remotion/{index.ts,Root.tsx}` — `registerRoot` + the `<Composition id="storyflow">`
+  (`calculateMetadata` derives duration from the last scene's `tSpokenEnd`); the bundle
+  entry for the renderer. Only the render script imports these — never Next.
+- **In-app render** (the app is now a renderer too, local-only): `scripts/render-remotion.mjs`
+  (standalone node, run as a CHILD PROCESS so `@remotion/renderer` never loads inside
+  Next — sidesteps webpack-in-webpack + native-addon issues) bundles the composition
+  (cached by a source hash in `.data/remotion-bundle/`) → `selectComposition` →
+  `renderMedia` (h264), streaming `PROGRESS` on stdout. `src/server/videoRenderer.ts`
+  (`startRenderJob`, busy lock, mirrors `clipBatchPoller`) gathers inputProps, spawns it,
+  writes progress + the final mp4 to the `renders` table; `src/instrumentation.ts`
+  `resetStaleRenders()` marks interrupted renders errored on boot. Routes:
+  `POST/GET /api/projects/[id]/render` (start requires all clips + audio / status) +
+  `GET .../render/download` (mp4 BLOB). UI: `src/components/RenderPanel.tsx` (captions
+  toggle → `Project.renderCaptions`, render button gated on all-clips, progress, download).
+  First render downloads a headless Chromium (~once). `@remotion/{bundler,renderer}` are in
+  `serverExternalPackages`.
 - `src/server/env.ts` — lazy, typed secret access; `ANTHROPIC_MODEL`.
 
 ## Conventions

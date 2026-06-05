@@ -61,6 +61,15 @@ function ensureSchema(conn: Database.Database): void {
       data       TEXT NOT NULL,
       updated_at INTEGER
     );
+    -- One in-app video render per project (background job → final mp4 BLOB).
+    CREATE TABLE IF NOT EXISTS renders (
+      project_id TEXT PRIMARY KEY,
+      status     TEXT NOT NULL,           -- 'rendering' | 'done' | 'error'
+      progress   REAL NOT NULL DEFAULT 0, -- 0..1
+      error      TEXT,
+      mp4        BLOB,
+      updated_at INTEGER
+    );
     -- Versioned: many rows per (project_id, scope, key); exactly one is active
     -- (the "master"). Regenerating adds a new active row and demotes the rest;
     -- older versions are kept so the user can promote one back.
@@ -165,6 +174,7 @@ export function deleteProject(id: string): void {
   conn.prepare("DELETE FROM clips WHERE project_id = ?").run(id);
   conn.prepare("DELETE FROM images WHERE project_id = ?").run(id);
   conn.prepare("DELETE FROM clip_batches WHERE project_id = ?").run(id);
+  conn.prepare("DELETE FROM renders WHERE project_id = ?").run(id);
 }
 
 export function saveAudio(id: string, mp3: Buffer): void {
@@ -272,6 +282,85 @@ export function listOpenClipBatchProjectIds(): string[] {
     )
     .all() as { project_id: string }[];
   return rows.map((r) => r.project_id);
+}
+
+/* -------------------------------- renders -------------------------------- */
+
+export type RenderRow = {
+  status: "rendering" | "done" | "error";
+  progress: number;
+  error: string | null;
+  hasMp4: boolean;
+};
+
+export function startRender(projectId: string): void {
+  db()
+    .prepare(
+      `INSERT INTO renders (project_id, status, progress, error, mp4, updated_at)
+       VALUES (?, 'rendering', 0, NULL, NULL, ?)
+       ON CONFLICT(project_id) DO UPDATE SET
+         status = 'rendering', progress = 0, error = NULL, mp4 = NULL,
+         updated_at = excluded.updated_at`,
+    )
+    .run(projectId, Date.now());
+}
+
+export function setRenderProgress(projectId: string, progress: number): void {
+  db()
+    .prepare(
+      "UPDATE renders SET progress = ?, updated_at = ? WHERE project_id = ?",
+    )
+    .run(Math.max(0, Math.min(1, progress)), Date.now(), projectId);
+}
+
+export function finishRender(projectId: string, mp4: Buffer): void {
+  db()
+    .prepare(
+      "UPDATE renders SET status = 'done', progress = 1, error = NULL, mp4 = ?, updated_at = ? WHERE project_id = ?",
+    )
+    .run(mp4, Date.now(), projectId);
+}
+
+export function failRender(projectId: string, message: string): void {
+  db()
+    .prepare(
+      "UPDATE renders SET status = 'error', error = ?, updated_at = ? WHERE project_id = ?",
+    )
+    .run(message, Date.now(), projectId);
+}
+
+/** Status without the (large) BLOB — safe for frequent polling. */
+export function getRender(projectId: string): RenderRow | null {
+  const row = db()
+    .prepare(
+      "SELECT status, progress, error, mp4 IS NOT NULL AS has_mp4 FROM renders WHERE project_id = ?",
+    )
+    .get(projectId) as
+    | { status: string; progress: number; error: string | null; has_mp4: number }
+    | undefined;
+  if (!row) return null;
+  return {
+    status: row.status as RenderRow["status"],
+    progress: row.progress,
+    error: row.error,
+    hasMp4: row.has_mp4 === 1,
+  };
+}
+
+export function getRenderMp4(projectId: string): Buffer | null {
+  const row = db()
+    .prepare("SELECT mp4 FROM renders WHERE project_id = ?")
+    .get(projectId) as { mp4: Buffer | null } | undefined;
+  return row?.mp4 ?? null;
+}
+
+/** Mark any render left 'rendering' (its in-memory job died) as errored. */
+export function resetStaleRenders(): void {
+  db()
+    .prepare(
+      "UPDATE renders SET status = 'error', error = 'Interrupted by server restart', updated_at = ? WHERE status = 'rendering'",
+    )
+    .run(Date.now());
 }
 
 /* ------------------------------- images ---------------------------------- */
@@ -481,6 +570,7 @@ export type UsageSummary = {
   calls: number;
   byOperation: Record<string, { usd: number; calls: number }>;
   byModel: Record<string, { usd: number; calls: number }>;
+  byProvider: Record<string, { usd: number; calls: number }>;
 };
 
 /** Aggregate spend; pass a projectId to scope it to one project. */
@@ -495,7 +585,7 @@ export function usageSummary(projectId?: string): UsageSummary {
     )
     .get(...params) as { usd: number; calls: number };
 
-  const group = (col: "operation" | "model") => {
+  const group = (col: "operation" | "model" | "provider") => {
     const rows = conn
       .prepare(
         `SELECT ${col} AS k, SUM(cost_usd) AS usd, COUNT(*) AS calls
@@ -512,5 +602,6 @@ export function usageSummary(projectId?: string): UsageSummary {
     calls: total.calls,
     byOperation: group("operation"),
     byModel: group("model"),
+    byProvider: group("provider"),
   };
 }

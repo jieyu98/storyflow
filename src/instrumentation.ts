@@ -6,4 +6,7 @@ export async function register(): Promise<void> {
   if (process.env.NEXT_RUNTIME !== "nodejs") return;
   const { ensurePoller } = await import("./server/clipBatchPoller");
   ensurePoller();
+  // A render isn't resumable across a restart — mark any left mid-render errored.
+  const { resetStaleRenders } = await import("./server/db");
+  resetStaleRenders();
 }

@@ -51,6 +51,7 @@ export type UsageSummary = {
   calls: number;
   byOperation: Record<string, { usd: number; calls: number }>;
   byModel: Record<string, { usd: number; calls: number }>;
+  byProvider: Record<string, { usd: number; calls: number }>;
 };
 
 const EMPTY_USAGE: UsageSummary = {
@@ -58,6 +59,7 @@ const EMPTY_USAGE: UsageSummary = {
   calls: 0,
   byOperation: {},
   byModel: {},
+  byProvider: {},
 };
 
 /** Spend summary; pass a projectId to scope it to one project. */
@@ -213,6 +215,62 @@ export async function cancelClipBatch(
   });
   if (!res.ok) return null;
   return (await res.json()).clipBatch ?? null;
+}
+
+/* ---------------------------- in-app render ------------------------------ */
+
+export type RenderStatus = {
+  status: "idle" | "rendering" | "done" | "error";
+  progress: number;
+  error?: string | null;
+  hasMp4?: boolean;
+};
+
+/** Start a background render. Throws with the server message; the thrown Error
+ *  carries `.missing` (scene indices without clips) when that's the cause. */
+export async function startRender(
+  projectId: string,
+): Promise<{ ok?: boolean }> {
+  const res = await fetch(`/api/projects/${projectId}/render`, {
+    method: "POST",
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    const err = new Error(data.error ?? "Could not start render.") as Error & {
+      missing?: number[];
+    };
+    if (Array.isArray(data.missing)) err.missing = data.missing;
+    throw err;
+  }
+  return data;
+}
+
+export async function getRenderStatus(
+  projectId: string,
+): Promise<RenderStatus> {
+  try {
+    const res = await fetch(`/api/projects/${projectId}/render`);
+    if (!res.ok) return { status: "idle", progress: 0 };
+    return (await res.json()).render ?? { status: "idle", progress: 0 };
+  } catch {
+    return { status: "idle", progress: 0 };
+  }
+}
+
+export function renderDownloadUrl(projectId: string): string {
+  return `/api/projects/${projectId}/render/download`;
+}
+
+/** Let Claude pick which caption words to emphasize → word indices. */
+export async function generateCaptionEmphasis(
+  projectId: string,
+): Promise<number[]> {
+  const res = await fetch(`/api/projects/${projectId}/captions`, {
+    method: "POST",
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error ?? "Could not pick emphasis.");
+  return data.indices ?? [];
 }
 
 /* -------------------------- generated images ----------------------------- */

@@ -3,7 +3,7 @@
 import { Player, type PlayerRef } from "@remotion/player";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { formatTime } from "@/lib/text";
-import type { Scene } from "@/lib/types";
+import type { Scene, Word } from "@/lib/types";
 import { PreviewComposition, type PreviewProps } from "@/remotion/PreviewComposition";
 import { PauseIcon, PlayIcon } from "./icons";
 
@@ -21,6 +21,9 @@ export default function PreviewPlayer({
   clipVersion,
   duration,
   seekReq,
+  captions,
+  showCaptions = true,
+  emphasis,
 }: {
   audioSrc: string;
   scenes: Scene[];
@@ -29,6 +32,9 @@ export default function PreviewPlayer({
   clipVersion: number;
   duration?: number;
   seekReq?: { t: number; n: number } | null;
+  captions?: Word[];
+  showCaptions?: boolean;
+  emphasis?: number[];
 }) {
   const playerRef = useRef<PlayerRef>(null);
   const [mounted, setMounted] = useState(false);
@@ -49,8 +55,12 @@ export default function PreviewPlayer({
       projectId,
       clipVersion,
       audioSrc,
+      captions: captions ?? [],
+      showCaptions,
+      emphasis: emphasis ?? [],
+      baseUrl: "", // relative URLs resolve against the page origin in the Player
     }),
-    [scenes, clips, projectId, clipVersion, audioSrc],
+    [scenes, clips, projectId, clipVersion, audioSrc, captions, showCaptions, emphasis],
   );
 
   function sceneAt(t: number): number {

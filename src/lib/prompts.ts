@@ -235,3 +235,35 @@ export const SCENE_TOOL = {
     required: ["scenes"],
   },
 } as const;
+
+/* --------------------------- caption emphasis ---------------------------- */
+
+export const EMPHASIS_SYSTEM = `You decide which parts of a short vertical (TikTok/Reels) video's narration to visually EMPHASIZE in karaoke-style captions. The narration is given as a numbered list of "index:word" tokens (words may carry trailing punctuation). Captions show ONE word at a time; emphasized words pop in a bright accent colour, plain words stay white.
+
+Return the 0-based indices of the CRUCIAL content — the standout words, short phrases, and the occasional whole short punchy sentence that carry the meaning and the emotional punch. Highlight a crucial unit as a WHOLE (a phrase as a contiguous run), not chopped into single words:
+- crucial single words — numbers/amounts ("48", "$38,000", "six"), names, strong nouns/verbs;
+- crucial short PHRASES — as a contiguous run (e.g. "phone man", "three-bedroom house", "higher on the ladder", "one rung below");
+- a RARE, very short, punchy SENTENCE that is a genuine emotional beat or turn — every word of it (e.g. "Lower middle class. Lower.", "So. For what, exactly?"). A neutral scene-setting fact ("Mom stayed home.", "We had a dog.") is NOT a punch line — leave those plain.
+
+CALIBRATION — this is the most important part:
+- The plain white words must stay the MAJORITY. Highlights are the standout moments that make a beat POP — aim for roughly a QUARTER of the words, and never more than about a third. If more than ~a third is highlighted, you are highlighting too much and nothing stands out.
+- Most highlighted spans are 1–5 words. Within a sentence, pick the single most important phrase — do NOT highlight the whole sentence unless it is short and genuinely a punch line.
+- NEVER highlight long, multi-clause or multi-sentence stretches.
+- Contiguous indices are expected WITHIN a highlighted phrase (include small glue words inside the span so it stays unbroken) — but keep the spans themselves short and surrounded by plain words.`;
+
+export const EMPHASIS_TOOL = {
+  name: "emit_emphasis",
+  description: "Return the word indices to emphasize in the captions.",
+  input_schema: {
+    type: "object" as const,
+    properties: {
+      indices: {
+        type: "array",
+        items: { type: "integer" },
+        description:
+          "0-based indices of every word in the crucial content. Contiguous runs are expected for highlighted phrases and whole sentences.",
+      },
+    },
+    required: ["indices"],
+  },
+} as const;

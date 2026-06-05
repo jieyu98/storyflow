@@ -1,6 +1,12 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { ANTHROPIC_MODEL, serverEnv } from "@/server/env";
-import { SCENE_SYSTEM, SCENE_TOOL, STORY_TOOL } from "./prompts";
+import {
+  EMPHASIS_SYSTEM,
+  EMPHASIS_TOOL,
+  SCENE_SYSTEM,
+  SCENE_TOOL,
+  STORY_TOOL,
+} from "./prompts";
 import {
   numberedWords,
   type SceneBeat,
@@ -145,4 +151,39 @@ ${numberedWords(words)}`;
     usage: usageFromMessage(message),
     model,
   };
+}
+
+/**
+ * Pick which words to emphasize in the karaoke captions. Returns sanitized,
+ * in-range, de-duplicated 0-based indices into `words`.
+ */
+export async function pickCaptionEmphasis(
+  words: Word[],
+  modelOverride?: string,
+): Promise<{ indices: number[]; usage: TokenUsage; model: string }> {
+  const model = modelOverride ?? ANTHROPIC_MODEL;
+  const numbered = words.map((w, i) => `${i}:${w.text}`).join(" ");
+  const message = await client().messages.create({
+    model,
+    max_tokens: 4096,
+    system: [
+      { type: "text", text: EMPHASIS_SYSTEM, cache_control: { type: "ephemeral" } },
+    ],
+    tools: [EMPHASIS_TOOL as unknown as Anthropic.Tool],
+    tool_choice: { type: "tool", name: EMPHASIS_TOOL.name },
+    messages: [
+      { role: "user", content: `NARRATION (index:word)\n${numbered}` },
+    ],
+  });
+  const input = extractToolInput(message, EMPHASIS_TOOL.name) as unknown as {
+    indices?: number[];
+  };
+  const indices = Array.from(
+    new Set(
+      (input.indices ?? []).filter(
+        (n) => Number.isInteger(n) && n >= 0 && n < words.length,
+      ),
+    ),
+  ).sort((a, b) => a - b);
+  return { indices, usage: usageFromMessage(message), model };
 }
