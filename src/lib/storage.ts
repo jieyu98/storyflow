@@ -219,6 +219,16 @@ export async function deleteImage(
   );
 }
 
+/** Delete every generated image for a project under one scope ("ref" | "scene"). */
+export async function deleteAllImages(
+  projectId: string,
+  scope: ImageScope,
+): Promise<void> {
+  await fetch(`/api/projects/${projectId}/images?scope=${scope}`, {
+    method: "DELETE",
+  });
+}
+
 export function imageUrl(
   projectId: string,
   scope: ImageScope,

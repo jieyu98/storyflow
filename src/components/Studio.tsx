@@ -8,6 +8,7 @@ import {
   audioUrl,
   base64ToBytes,
   deleteAllClips,
+  deleteAllImages,
   deleteImage,
   generateClip,
   generateImage,
@@ -231,10 +232,19 @@ export default function Studio({ projectId }: { projectId: string }) {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? "Could not cut scenes.");
       const next: Scene[] = data.scenes ?? [];
-      // Re-cut beats no longer line up with old clips — drop them all.
+      // A re-cut reassigns scene indices, so the old per-scene clips AND
+      // starting-frame stills (both keyed by index) no longer match — drop them.
+      // Bible reference images (scope "ref") are keyed by entity id, so they stay.
       await deleteAllClips(projectId);
+      await deleteAllImages(projectId, "scene");
       setClips(new Set());
       setClipVersion((v) => v + 1);
+      setImages((prev) => {
+        const kept = new Set<string>();
+        for (const k of prev) if (!k.startsWith("scene:")) kept.add(k);
+        return kept;
+      });
+      setImageVersion((v) => v + 1);
       setScenes(next);
       // Scene generation may grow the visual bible (agent 2 mints reusable
       // entities for recurring subjects); persist the merged bible too.

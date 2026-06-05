@@ -129,8 +129,11 @@ So Claude is called in steps 1 and 3; ElevenLabs only in step 2; Gemini in step 
   model }`; only Claude is metered so far.
 - `src/app/api/projects/*` — project CRUD, `[id]/audio` GET/PUT,
   `[id]/clips` (list) + `[id]/clips/[index]` GET/PUT/DELETE +
-  `[id]/clips/[index]/generate` (POST → Grok), and `[id]/images` (list) +
-  `[id]/images/generate` (POST) + `[id]/images/[scope]/[key]` GET/DELETE.
+  `[id]/clips/[index]/generate` (POST → Grok), and `[id]/images` (list +
+  DELETE `?scope=` for bulk drop) + `[id]/images/generate` (POST) +
+  `[id]/images/[scope]/[key]` GET/DELETE. Regenerating scenes drops the old
+  clips AND `scope:"scene"` stills (both keyed by index, so a re-cut invalidates
+  them); `scope:"ref"` bible images are keyed by entity id and kept.
 - `src/components/Automate.tsx` — a slim **progress readout** shown under the
   script: a progress bar + one-line status across the four stages (voiceover,
   scenes, references, clips). It performs **no** actions — each stage is done in

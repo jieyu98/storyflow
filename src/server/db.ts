@@ -226,6 +226,13 @@ export function deleteImage(
     .run(projectId, scope, key);
 }
 
+/** Delete every image for a project under one scope (e.g. all "scene" frames). */
+export function deleteImagesByScope(projectId: string, scope: string): void {
+  db()
+    .prepare("DELETE FROM images WHERE project_id = ? AND scope = ?")
+    .run(projectId, scope);
+}
+
 export function listImageKeys(
   projectId: string,
 ): { scope: string; key: string }[] {
