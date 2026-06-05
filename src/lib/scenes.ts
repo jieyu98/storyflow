@@ -1,4 +1,4 @@
-import { type Scene, type Word } from "./types";
+import { type Scene, type VisualBible, type Word } from "./types";
 
 /** One AI-chosen beat, identified by the word index it ends on, plus its prompts. */
 export type SceneBeat = {
@@ -11,6 +11,61 @@ export type SceneBeat = {
   visualMode?: "live" | "concept";
   shotType?: string;
 };
+
+/** A new bible entity that scene generation (agent 2) chose to introduce. */
+export type SceneBibleAddition = {
+  id: string;
+  kind: "character" | "location";
+  name: string;
+  visualDescription: string;
+};
+
+/**
+ * Fold agent 2's bibleAdditions into the bible. Additive and re-cut-safe:
+ * - story-authored entities (no `origin`) are always kept;
+ * - scene-minted entities (`origin: "scene"`) are kept only if the NEW cut still
+ *   references them — so a re-cut prunes orphans instead of accumulating cruft;
+ * - additions are added (tagged `origin: "scene"`) only when actually referenced
+ *   by the cut and their id is free, so they never override the story cast.
+ */
+export function mergeSceneEntities(
+  bible: VisualBible,
+  additions: SceneBibleAddition[],
+  scenes: Scene[],
+): VisualBible {
+  const referenced = new Set<string>();
+  for (const s of scenes) {
+    s.characterIds?.forEach((id) => referenced.add(id));
+    s.locationIds?.forEach((id) => referenced.add(id));
+  }
+
+  const keep = <T extends { id: string; origin?: "scene" }>(arr: T[]): T[] =>
+    arr.filter((e) => e.origin !== "scene" || referenced.has(e.id));
+  const characters = keep(bible.characters);
+  const locations = keep(bible.locations);
+
+  const taken = new Set<string>([
+    ...characters.map((c) => c.id),
+    ...locations.map((l) => l.id),
+  ]);
+
+  for (const a of additions ?? []) {
+    const id = typeof a?.id === "string" ? a.id.trim() : "";
+    if (!id || taken.has(id) || !referenced.has(id)) continue;
+    if (!a.name?.trim() || !a.visualDescription?.trim()) continue;
+    taken.add(id);
+    const entity = {
+      id,
+      name: a.name.trim(),
+      visualDescription: a.visualDescription.trim(),
+      origin: "scene" as const,
+    };
+    if (a.kind === "character") characters.push(entity);
+    else locations.push(entity);
+  }
+
+  return { characters, locations };
+}
 
 /** Numbered word list with cumulative end-times, fed to the beat-cutting prompt. */
 export function numberedWords(words: Word[]): string {

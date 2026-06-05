@@ -97,6 +97,8 @@ animationPrompt — how the still MOVES over its clip (for an image-to-video too
 
 characterIds — the ids of bible characters visible in the beat.
 
+GROW THE BIBLE WHEN A SUBJECT RECURS. The bible above is the fixed cast, but it may not contain every subject you choose to feature. If a CONCRETE subject — a specific object, prop, place, or person — appears in 2+ beats, OR is a single hero subject whose look must stay identical (e.g. a recurring metaphor object like the same ladder, the same letter, the same phone), and it is NOT already in the bible, then ADD it: emit an entry in bibleAdditions with a NEW kebab-case id, its kind (use "location" for objects/props/places, "character" for people), a short name, and a FIXED, concrete, style-neutral visualDescription — then reference that id in characterIds/locationIds in EVERY beat it appears in. This is what gives the subject one reusable reference image so it looks the same across shots. Do NOT add one-off background subjects, pure abstractions, or anything already in the bible (reference those by their existing id).
+
 Keep continuity: consecutive beats should read like the same world and characters. Return everything through the emit_scenes tool, one entry per beat, in order.`;
 
 // Scene-storyboard prompt for INFORMATIONAL / explainer writing styles (e.g. the
@@ -139,6 +141,8 @@ animationPrompt — how the still MOVES over its clip (for an image-to-video too
 characterIds — the ids of bible characters visible in the beat (often none for explainer beats).
 
 locationIds — the ids of bible locations / key objects visible in the beat, so the same reference image can be reused across beats for visual consistency. List every bible location or object that actually appears.
+
+GROW THE BIBLE WHEN AN OBJECT RECURS. The bible may not contain every object/prop you feature. If a concrete object, prop, or place appears in 2+ beats (or is a hero object whose look must stay identical across the before/after), and it is NOT already in the bible, ADD it: emit an entry in bibleAdditions with a NEW kebab-case id, kind "location" (or "character" only for a recurring person), a short name, and a FIXED, concrete, style-neutral visualDescription — then reference that id in locationIds in every beat it appears in. Do NOT add one-off subjects, abstract concepts, or anything already in the bible (reference those by their existing id).
 
 Keep continuity: consecutive beats should read like the same clean world and the same objects. Return everything through the emit_scenes tool, one entry per beat, in order.`;
 
@@ -197,6 +201,34 @@ export const SCENE_TOOL = {
             },
           },
           required: ["endWord", "name", "imagePrompt", "animationPrompt"],
+        },
+      },
+      bibleAdditions: {
+        type: "array",
+        description:
+          "NEW recurring subjects to add to the visual bible (see the system prompt). Omit or leave empty if there are none.",
+        items: {
+          type: "object",
+          properties: {
+            id: {
+              type: "string",
+              description:
+                "new kebab-case id, unique and NOT already in the bible (e.g. 'class-ladder', 'narrator-laptop').",
+            },
+            kind: {
+              type: "string",
+              enum: ["character", "location"],
+              description:
+                "'character' for a recurring person; 'location' for a recurring object, prop, or place.",
+            },
+            name: { type: "string", description: "short human name." },
+            visualDescription: {
+              type: "string",
+              description:
+                "Fixed, concrete, style-neutral visuals so it looks identical every appearance. No art style/medium.",
+            },
+          },
+          required: ["id", "kind", "name", "visualDescription"],
         },
       },
     },

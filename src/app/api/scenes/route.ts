@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { generateSceneBeats } from "@/lib/anthropic";
-import { buildScenesFromBeats } from "@/lib/scenes";
+import { buildScenesFromBeats, mergeSceneEntities } from "@/lib/scenes";
 import { getSceneSystem } from "@/lib/scriptStyles";
 import { apiError } from "@/lib/http";
 import { recordAnthropicUsage } from "@/server/usage";
@@ -42,6 +42,7 @@ export async function POST(req: Request) {
       : undefined;
     const {
       beats,
+      bibleAdditions,
       usage,
       model: usedModel,
     } = await generateSceneBeats(
@@ -68,7 +69,12 @@ export async function POST(req: Request) {
       );
     }
     const scenes = buildScenesFromBeats(words, beats, MAX_CLIP_SECONDS);
-    return NextResponse.json({ scenes });
+    const visualBible = mergeSceneEntities(
+      body.visualBible ?? EMPTY_BIBLE,
+      bibleAdditions,
+      scenes,
+    );
+    return NextResponse.json({ scenes, visualBible });
   } catch (err) {
     return apiError(err);
   }

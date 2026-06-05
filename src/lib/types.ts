@@ -23,12 +23,16 @@ export type BibleCharacter = {
   id: string;
   name: string;
   visualDescription: string;
+  /** "scene" = minted by scene generation (agent 2); absent = authored with the script (agent 1). */
+  origin?: "scene";
 };
 
 export type BibleLocation = {
   id: string;
   name: string;
   visualDescription: string;
+  /** "scene" = minted by scene generation (agent 2); absent = authored with the script (agent 1). */
+  origin?: "scene";
 };
 
 export type VisualBible = {

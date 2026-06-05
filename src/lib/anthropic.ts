@@ -1,7 +1,11 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { ANTHROPIC_MODEL, serverEnv } from "@/server/env";
 import { SCENE_SYSTEM, SCENE_TOOL, STORY_TOOL } from "./prompts";
-import { numberedWords, type SceneBeat } from "./scenes";
+import {
+  numberedWords,
+  type SceneBeat,
+  type SceneBibleAddition,
+} from "./scenes";
 import type { TokenUsage } from "./pricing";
 import type { VisualBible, Word } from "./types";
 
@@ -87,7 +91,12 @@ export async function generateSceneBeats(
     system?: string;
     model?: string;
   } = {},
-): Promise<{ beats: SceneBeat[]; usage: TokenUsage; model: string }> {
+): Promise<{
+  beats: SceneBeat[];
+  bibleAdditions: SceneBibleAddition[];
+  usage: TokenUsage;
+  model: string;
+}> {
   const model = opts.model ?? ANTHROPIC_MODEL;
   const userContent = `Hard maximum clip length: ${maxSeconds} seconds. Choose each beat's length yourself from its content and pacing — keep most beats short, and only approach this maximum when a beat genuinely needs a long, sustained hold.
 
@@ -126,6 +135,12 @@ ${numberedWords(words)}`;
 
   const input = extractToolInput(message, SCENE_TOOL.name) as unknown as {
     scenes?: SceneBeat[];
+    bibleAdditions?: SceneBibleAddition[];
   };
-  return { beats: input.scenes ?? [], usage: usageFromMessage(message), model };
+  return {
+    beats: input.scenes ?? [],
+    bibleAdditions: input.bibleAdditions ?? [],
+    usage: usageFromMessage(message),
+    model,
+  };
 }

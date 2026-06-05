@@ -229,7 +229,13 @@ export default function Studio({ projectId }: { projectId: string }) {
       setClips(new Set());
       setClipVersion((v) => v + 1);
       setScenes(next);
-      save((p) => ({ ...p, scenes: next }));
+      // Scene generation may grow the visual bible (agent 2 mints reusable
+      // entities for recurring subjects); persist the merged bible too.
+      save((p) => ({
+        ...p,
+        scenes: next,
+        visualBible: data.visualBible ?? p.visualBible,
+      }));
       refreshUsage();
     } catch (e) {
       setError(e instanceof Error ? e.message : "Could not cut scenes.");

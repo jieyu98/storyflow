@@ -30,11 +30,15 @@ asking.**
    the narration as numbered words tagged with end-times + the visual bible, and
    returns ordered **beats** (`emit_scenes`: each beat = the word index it ENDS
    on, a name, `shotType`, image prompt, animation prompt, `visualMode`
-   live/concept, `characterIds`, `locationIds`). The
-   scene **system prompt is per writing style** (`getSceneSystem` → `SCENE_SYSTEM`
-   for stories, `SCENE_SYSTEM_EXPLAINER` for the YSK explainer). `/api/scenes`
-   then calls `buildScenesFromBeats` to turn the beats into contiguous scenes
-   with EXACT timing from the timestamps.
+   live/concept, `characterIds`, `locationIds`). It can also return
+   `bibleAdditions` — NEW recurring subjects (e.g. a ladder motif, a laptop) that
+   agent 1 didn't capture; `mergeSceneEntities` folds these into the bible
+   (tagged `origin:"scene"`, additive, pruned on re-cut) so they get a reusable
+   reference image too. The scene **system prompt is per writing style**
+   (`getSceneSystem` → `SCENE_SYSTEM` for stories, `SCENE_SYSTEM_EXPLAINER` for
+   the YSK explainer). `/api/scenes` then calls `buildScenesFromBeats` to turn the
+   beats into contiguous scenes with EXACT timing from the timestamps, and returns
+   `{ scenes, visualBible }` (the merged bible).
 4. **Generate images** (`/api/projects/[id]/images/generate` → Gemini, optional).
    `src/lib/gemini.ts` calls Nano Banana with a prompt (+ any reference images as
    `inlineData` for consistency) and stores the result in the `images` table
@@ -68,6 +72,9 @@ So Claude is called in steps 1 and 3; ElevenLabs only in step 2; Gemini in step 
 - **Cross-shot consistency**: `composeReferencePrompt` builds a canonical
   reference-image prompt per bible entity (surfaced in `VisualBibleView`); beats
   carry `characterIds`/`locationIds` so each scene knows which reference to reuse.
+  Agent 1 fixes the cast, but agent 2 can **grow the bible** during cutting
+  (`bibleAdditions` → `mergeSceneEntities`) for recurring subjects it chooses to
+  feature, so those get a reusable reference image and stay identical across shots.
 - **Per-scene recipe** (`src/lib/recipe.ts`, `buildSceneRecipes`): a pure,
   deterministic step-by-step production guide per scene (generate fresh vs upload
   a reference; image→video vs extend), computed at render time.
