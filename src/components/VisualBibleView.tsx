@@ -23,6 +23,7 @@ export default function VisualBibleView({
   onGenerateImage,
   onDeleteImage,
   onToggleRef,
+  onBuildBible,
 }: {
   bible: VisualBible;
   styleId: string;
@@ -38,14 +39,61 @@ export default function VisualBibleView({
   ) => Promise<void>;
   onDeleteImage: (scope: ImageScope, key: string) => Promise<void>;
   onToggleRef: (id: string, done: boolean) => void;
+  /** Build a bible from the script (pasted-script projects with an empty bible). */
+  onBuildBible?: () => Promise<void>;
 }) {
   const [open, setOpen] = useState(false);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [error, setError] = useState<{ id: string; msg: string } | null>(null);
+  const [building, setBuilding] = useState(false);
+  const [buildErr, setBuildErr] = useState<string | null>(null);
 
   const entities = [...bible.characters, ...bible.locations];
   const count = entities.length;
-  if (count === 0) return null;
+
+  // Empty bible (e.g. a pasted script). Offer to build one from the script;
+  // otherwise stay hidden (the bible is grown by scene cutting regardless).
+  if (count === 0) {
+    if (!onBuildBible) return null;
+    async function build() {
+      setBuilding(true);
+      setBuildErr(null);
+      try {
+        await onBuildBible!();
+      } catch (e) {
+        setBuildErr(e instanceof Error ? e.message : "Couldn't build the bible.");
+      } finally {
+        setBuilding(false);
+      }
+    }
+    return (
+      <section className="surface p-5">
+        <p className="eyebrow flex items-center gap-2">
+          <ImageIcon width={14} height={14} /> Visual bible
+        </p>
+        <p className="mt-1 text-xs text-faint">
+          No recurring characters or objects yet. Build a visual bible from your
+          script so people and key objects stay consistent across every shot.
+          (Cutting scenes also grows it.)
+        </p>
+        {buildErr && <p className="mt-2 text-xs text-ember-300">{buildErr}</p>}
+        <button
+          type="button"
+          onClick={build}
+          disabled={building}
+          className="btn btn-ember mt-3 !text-xs"
+        >
+          {building ? (
+            <>
+              <Spinner width={14} height={14} /> Building…
+            </>
+          ) : (
+            "Build visual bible"
+          )}
+        </button>
+      </section>
+    );
+  }
 
   const done = entities.filter(
     (e) => images.has(`ref:${e.id}`) || refDoneIds.includes(e.id),

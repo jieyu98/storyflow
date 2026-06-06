@@ -3,7 +3,7 @@
 // is the thin async client, plus a one-time migration of any projects left in
 // the old browser localStorage / IndexedDB.
 
-import type { ClipBatch, ImageBatch, Project } from "./types";
+import type { ClipBatch, ImageBatch, Project, VisualBible } from "./types";
 
 const hasWindow = typeof window !== "undefined";
 
@@ -259,6 +259,16 @@ export async function getRenderStatus(
 
 export function renderDownloadUrl(projectId: string): string {
   return `/api/projects/${projectId}/render/download`;
+}
+
+/** Build a visual bible from the script (billed Claude call) — for pasted scripts. */
+export async function generateBible(projectId: string): Promise<VisualBible> {
+  const res = await fetch(`/api/projects/${projectId}/bible`, {
+    method: "POST",
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error ?? "Could not build the visual bible.");
+  return data.visualBible ?? { characters: [], locations: [] };
 }
 
 /** Generate a short post caption + 5 hashtags from the script (billed Claude call). */

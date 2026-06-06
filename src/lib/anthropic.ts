@@ -1,6 +1,8 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { ANTHROPIC_MODEL, serverEnv } from "@/server/env";
 import {
+  BIBLE_SYSTEM,
+  BIBLE_TOOL,
   CAPTION_SYSTEM,
   CAPTION_TOOL,
   EMPHASIS_SYSTEM,
@@ -150,6 +152,41 @@ ${numberedWords(words)}`;
   return {
     beats: input.scenes ?? [],
     bibleAdditions: input.bibleAdditions ?? [],
+    usage: usageFromMessage(message),
+    model,
+  };
+}
+
+/** Build a visual bible (recurring cast + objects) from a finished script — used
+ *  when the user pasted their own narration, so the story agent never ran. */
+export async function generateBible(
+  script: string,
+  modelOverride?: string,
+): Promise<{ visualBible: VisualBible; usage: TokenUsage; model: string }> {
+  const model = modelOverride ?? ANTHROPIC_MODEL;
+  const message = await client().messages.create({
+    model,
+    max_tokens: 2048,
+    system: [
+      { type: "text", text: BIBLE_SYSTEM, cache_control: { type: "ephemeral" } },
+    ],
+    tools: [BIBLE_TOOL as unknown as Anthropic.Tool],
+    tool_choice: { type: "tool", name: BIBLE_TOOL.name },
+    messages: [
+      {
+        role: "user",
+        content: `Build the visual bible for this narration script:\n\n${script}`,
+      },
+    ],
+  });
+  const input = extractToolInput(message, BIBLE_TOOL.name) as unknown as {
+    visualBible?: VisualBible;
+  };
+  return {
+    visualBible: {
+      characters: input.visualBible?.characters ?? [],
+      locations: input.visualBible?.locations ?? [],
+    },
     usage: usageFromMessage(message),
     model,
   };

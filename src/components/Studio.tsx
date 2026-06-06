@@ -12,6 +12,7 @@ import {
   deleteAllClips,
   deleteAllImages,
   deleteImage,
+  generateBible,
   generateCaptionEmphasis,
   generateClip,
   generateImage,
@@ -349,6 +350,14 @@ export default function Studio({ projectId }: { projectId: string }) {
     });
   }
 
+  // Build a visual bible from the script (pasted-script projects with no bible).
+  // Throws on failure so VisualBibleView shows the message. Billed Claude call.
+  async function handleBuildBible() {
+    const visualBible = await generateBible(projectId);
+    save((p) => ({ ...p, visualBible }));
+    refreshUsage();
+  }
+
   // Generate a post caption + 5 hashtags from the script; persist on the project.
   // Billed Claude call → refresh the spend chip.
   async function handleGenerateSocial() {
@@ -613,6 +622,7 @@ export default function Studio({ projectId }: { projectId: string }) {
           onGenerateImage={handleGenerateImage}
           onDeleteImage={handleDeleteImage}
           onToggleRef={handleToggleRef}
+          onBuildBible={script.trim() ? handleBuildBible : undefined}
         />
 
         <div className="grid gap-4 lg:grid-cols-2">

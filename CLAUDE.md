@@ -167,7 +167,10 @@ So Claude is called in steps 1 and 3; ElevenLabs only in step 2; Gemini in step 
   version)/DELETE (GET & DELETE take `?id=` for a specific version) +
   `[id]/images/[scope]/[key]/versions` (GET list / POST set-master) +
   `[id]/images/batch` (POST/GET/DELETE → Gemini image batch) + `[id]/social`
-  (POST → Claude caption + 5 hashtags).
+  (POST → Claude caption + 5 hashtags) + `[id]/bible` (POST → Claude builds a
+  visual bible from a pasted script when one wasn't authored — `generateBible`,
+  surfaced as a "Build visual bible" button in `VisualBibleView` when the bible
+  is empty).
   Regenerating scenes drops the old clips AND `scope:"scene"` stills (all
   versions, keyed by index, so a re-cut invalidates them) and clears
   `Project.approvedScenes`; `scope:"ref"` bible images are keyed by entity id and

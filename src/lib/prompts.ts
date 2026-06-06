@@ -297,3 +297,68 @@ export const CAPTION_TOOL = {
     required: ["description", "hashtags"],
   },
 } as const;
+
+/* --- visual bible from a finished script (`/api/projects/[id]/bible`) --- */
+// Used when the user PASTED their own narration (so the script-writing agent
+// never ran). Builds the same kind of cast agent 1 would, without rewriting.
+
+export const BIBLE_SYSTEM = `You build the VISUAL BIBLE for a finished short-form narration script. You are NOT rewriting or changing the script — only cataloguing its visual cast so every shot of it stays consistent.
+
+Read the whole narration, then return via the emit_bible tool:
+- characters: every recurring PERSON the narration features (include the narrator only if they are actually shown; include named or clearly recurring people). For each: a kebab-case id, a short name, and a FIXED, concrete, style-neutral visualDescription (age, build, hair, eyes, skin, clothing, distinguishing features). No plot, no mood, no art style — only what they look like.
+- locations: the recurring PLACES and key recurring OBJECTS/props the narration features (a specific room, a car, a phone, a letter — anything that must look identical each time it appears). For each: a kebab-case id, a short name, and a FIXED, concrete, style-neutral visualDescription (setting, key objects, materials). No art style.
+
+Only include subjects that actually recur or are visually important; skip one-off background details and pure abstractions. Keep descriptions concrete and consistent so the same id always renders the same way. Return empty arrays if the script has no recurring subjects.`;
+
+export const BIBLE_TOOL = {
+  name: "emit_bible",
+  description:
+    "Return the visual bible (recurring characters + locations/objects) for a finished narration script.",
+  input_schema: {
+    type: "object" as const,
+    properties: {
+      visualBible: {
+        type: "object",
+        properties: {
+          characters: {
+            type: "array",
+            items: {
+              type: "object",
+              properties: {
+                id: {
+                  type: "string",
+                  description: "kebab-case id, e.g. 'narrator', 'older-brother'.",
+                },
+                name: { type: "string" },
+                visualDescription: {
+                  type: "string",
+                  description:
+                    "Fixed concrete visuals: age, build, hair, eyes, skin, clothing, distinguishing features. No plot, no art style.",
+                },
+              },
+              required: ["id", "name", "visualDescription"],
+            },
+          },
+          locations: {
+            type: "array",
+            items: {
+              type: "object",
+              properties: {
+                id: { type: "string" },
+                name: { type: "string" },
+                visualDescription: {
+                  type: "string",
+                  description:
+                    "Setting, key objects, materials. Concrete and style-neutral. No art style.",
+                },
+              },
+              required: ["id", "name", "visualDescription"],
+            },
+          },
+        },
+        required: ["characters", "locations"],
+      },
+    },
+    required: ["visualBible"],
+  },
+} as const;
