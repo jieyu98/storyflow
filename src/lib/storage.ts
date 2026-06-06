@@ -3,7 +3,7 @@
 // is the thin async client, plus a one-time migration of any projects left in
 // the old browser localStorage / IndexedDB.
 
-import type { ClipBatch, Project } from "./types";
+import type { ClipBatch, ImageBatch, Project } from "./types";
 
 const hasWindow = typeof window !== "undefined";
 
@@ -261,6 +261,18 @@ export function renderDownloadUrl(projectId: string): string {
   return `/api/projects/${projectId}/render/download`;
 }
 
+/** Generate a short post caption + 5 hashtags from the script (billed Claude call). */
+export async function generateSocial(
+  projectId: string,
+): Promise<{ description: string; hashtags: string[] }> {
+  const res = await fetch(`/api/projects/${projectId}/social`, {
+    method: "POST",
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error ?? "Could not generate the caption.");
+  return { description: data.description ?? "", hashtags: data.hashtags ?? [] };
+}
+
 /** Let Claude pick which caption words to emphasize → word indices. */
 export async function generateCaptionEmphasis(
   projectId: string,
@@ -312,6 +324,28 @@ export async function generateImage(
   if (!res.ok) {
     const data = await res.json().catch(() => ({}));
     throw new Error(data.error ?? "Image generation failed.");
+  }
+}
+
+/** Upload your own image (made outside the app) as this key's frame. Stored as a
+ *  new active version (the master), just like an in-app generation. */
+export async function uploadImage(
+  projectId: string,
+  scope: ImageScope,
+  key: string,
+  file: File | Blob,
+): Promise<void> {
+  const res = await fetch(
+    `/api/projects/${projectId}/images/${scope}/${encodeURIComponent(key)}`,
+    {
+      method: "PUT",
+      headers: { "content-type": file.type || "image/png" },
+      body: file,
+    },
+  );
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    throw new Error(data.error ?? "Image upload failed.");
   }
 }
 
@@ -406,6 +440,61 @@ export function imageUrl(
   return `/api/projects/${projectId}/images/${scope}/${encodeURIComponent(key)}${
     qs ? `?${qs}` : ""
   }`;
+}
+
+/* ----------------------- image batch (Gemini) ---------------------------- */
+
+export type ImageBatchRequestInput = {
+  scope: ImageScope;
+  /** Entity id (ref) or scene index as text (scene). */
+  key: string;
+  prompt: string;
+  /** Bible-entity ids whose ref image is inlined for consistency (scene frames). */
+  referenceKeys?: string[];
+  aspectRatio?: string;
+  /** Human label for the progress chips. */
+  label?: string;
+};
+
+/** Submit selected images as one async Gemini batch. Throws with server message. */
+export async function submitImageBatch(
+  projectId: string,
+  requests: ImageBatchRequestInput[],
+  imageModelId?: string,
+): Promise<{ imageBatch: ImageBatch }> {
+  const res = await fetch(`/api/projects/${projectId}/images/batch`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ requests, imageModelId }),
+  });
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    throw new Error(data.error ?? "Could not submit the image batch.");
+  }
+  return res.json();
+}
+
+/** Current image-batch status (the server-side poller keeps it fresh). */
+export async function getImageBatch(
+  projectId: string,
+): Promise<ImageBatch | null> {
+  try {
+    const res = await fetch(`/api/projects/${projectId}/images/batch`);
+    if (!res.ok) return null;
+    return (await res.json()).imageBatch ?? null;
+  } catch {
+    return null;
+  }
+}
+
+export async function cancelImageBatch(
+  projectId: string,
+): Promise<ImageBatch | null> {
+  const res = await fetch(`/api/projects/${projectId}/images/batch`, {
+    method: "DELETE",
+  });
+  if (!res.ok) return null;
+  return (await res.json()).imageBatch ?? null;
 }
 
 /* ----------------------- one-time legacy migration ----------------------- */

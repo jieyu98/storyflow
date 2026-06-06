@@ -5,7 +5,7 @@
 import Database from "better-sqlite3";
 import { mkdirSync } from "node:fs";
 import { join } from "node:path";
-import type { ClipBatch, Project } from "@/lib/types";
+import type { ClipBatch, ImageBatch, Project } from "@/lib/types";
 
 const globalForDb = globalThis as unknown as {
   __storyflowDb?: Database.Database;
@@ -57,6 +57,14 @@ function ensureSchema(conn: Database.Database): void {
     -- out of the projects row so the background poller can write it without
     -- clobbering the client's fire-and-forget project saves.
     CREATE TABLE IF NOT EXISTS clip_batches (
+      project_id TEXT PRIMARY KEY,
+      data       TEXT NOT NULL,
+      updated_at INTEGER
+    );
+    -- One async Gemini Batch image-generation job per project (ImageBatch JSON).
+    -- Same rationale as clip_batches: written by the background poller, kept off
+    -- the projects row so it never clobbers the client's project saves.
+    CREATE TABLE IF NOT EXISTS image_batches (
       project_id TEXT PRIMARY KEY,
       data       TEXT NOT NULL,
       updated_at INTEGER
@@ -174,6 +182,7 @@ export function deleteProject(id: string): void {
   conn.prepare("DELETE FROM clips WHERE project_id = ?").run(id);
   conn.prepare("DELETE FROM images WHERE project_id = ?").run(id);
   conn.prepare("DELETE FROM clip_batches WHERE project_id = ?").run(id);
+  conn.prepare("DELETE FROM image_batches WHERE project_id = ?").run(id);
   conn.prepare("DELETE FROM renders WHERE project_id = ?").run(id);
 }
 
@@ -279,6 +288,41 @@ export function listOpenClipBatchProjectIds(): string[] {
   const rows = db()
     .prepare(
       "SELECT project_id FROM clip_batches WHERE json_extract(data, '$.status') = 'open'",
+    )
+    .all() as { project_id: string }[];
+  return rows.map((r) => r.project_id);
+}
+
+/* ----------------------------- image batches ----------------------------- */
+
+export function saveImageBatch(projectId: string, batch: ImageBatch): void {
+  db()
+    .prepare(
+      `INSERT INTO image_batches (project_id, data, updated_at)
+       VALUES (?, ?, ?)
+       ON CONFLICT(project_id) DO UPDATE SET
+         data = excluded.data,
+         updated_at = excluded.updated_at`,
+    )
+    .run(projectId, JSON.stringify(batch), Date.now());
+}
+
+export function getImageBatch(projectId: string): ImageBatch | null {
+  const row = db()
+    .prepare("SELECT data FROM image_batches WHERE project_id = ?")
+    .get(projectId) as { data: string } | undefined;
+  return row ? (JSON.parse(row.data) as ImageBatch) : null;
+}
+
+export function deleteImageBatch(projectId: string): void {
+  db().prepare("DELETE FROM image_batches WHERE project_id = ?").run(projectId);
+}
+
+/** Project ids whose image batch is still being processed (poller work-list). */
+export function listOpenImageBatchProjectIds(): string[] {
+  const rows = db()
+    .prepare(
+      "SELECT project_id FROM image_batches WHERE json_extract(data, '$.status') = 'open'",
     )
     .all() as { project_id: string }[];
   return rows.map((r) => r.project_id);

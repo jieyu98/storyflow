@@ -11,6 +11,18 @@ export function estSeconds(text: string, wpm = 150): number {
   return Math.round((countWords(text) / wpm) * 60);
 }
 
+/** Derive a short, human title from a pasted script (first sentence/line). */
+export function deriveTitle(script: string): string {
+  const firstLine = script.trim().split(/\n+/)[0]?.trim() ?? "";
+  // Prefer the first sentence when the opening line runs long.
+  const sentence = firstLine.split(/(?<=[.!?])\s/)[0]?.trim() || firstLine;
+  const base = sentence || "Untitled story";
+  if (base.length <= 60) return base;
+  const cut = base.slice(0, 60);
+  const lastSpace = cut.lastIndexOf(" ");
+  return `${(lastSpace > 20 ? cut.slice(0, lastSpace) : cut).trim()}…`;
+}
+
 export function formatTime(seconds: number): string {
   if (!Number.isFinite(seconds) || seconds < 0) seconds = 0;
   const m = Math.floor(seconds / 60);

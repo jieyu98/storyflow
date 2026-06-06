@@ -11,13 +11,14 @@
 import {
   AbsoluteFill,
   Audio,
+  Img,
   OffthreadVideo,
   Sequence,
   useCurrentFrame,
   useVideoConfig,
 } from "remotion";
 import { loadFont } from "@remotion/google-fonts/Montserrat";
-import { clipUrl } from "@/lib/storage";
+import { clipUrl, imageUrl } from "@/lib/storage";
 import type { Scene, Word } from "@/lib/types";
 
 // Loaded deterministically (Remotion waits for it) — Next's CSS font vars don't
@@ -28,8 +29,15 @@ export type PreviewProps = {
   scenes: Scene[];
   /** Indices of scenes that have a clip (Set isn't serializable as inputProps). */
   clipIndices: number[];
+  /** Indices of scenes that have a generated starting-frame still. */
+  imageIndices?: number[];
   projectId: string;
   clipVersion: number;
+  /** Cache-bust nonce for still images (parallel to clipVersion). */
+  imageVersion?: number;
+  /** Preview the still starting frames instead of the clips (preview-only;
+   *  the MP4 render never sets this, so it always uses clips). */
+  useStills?: boolean;
   audioSrc: string;
   /** Per-word timings for karaoke captions. */
   captions?: Word[];
@@ -43,19 +51,34 @@ export type PreviewProps = {
 function SceneLayer({
   scene,
   hasClip,
+  hasImage,
+  useStills,
   projectId,
   clipVersion,
+  imageVersion,
   baseUrl,
 }: {
   scene: Scene;
   hasClip: boolean;
+  hasImage: boolean;
+  useStills: boolean;
   projectId: string;
   clipVersion: number;
+  imageVersion: number;
   baseUrl: string;
 }) {
+  // In stills mode show the starting frame; otherwise the clip. Either falls
+  // back to the labelled placeholder when that asset doesn't exist yet.
+  const showStill = useStills && hasImage;
+  const showClip = !useStills && hasClip;
   return (
     <AbsoluteFill style={{ backgroundColor: "#070a12" }}>
-      {hasClip ? (
+      {showStill ? (
+        <Img
+          src={baseUrl + imageUrl(projectId, "scene", String(scene.index), imageVersion)}
+          style={{ width: "100%", height: "100%", objectFit: "cover" }}
+        />
+      ) : showClip ? (
         <OffthreadVideo
           src={baseUrl + clipUrl(projectId, scene.index, clipVersion)}
           muted
@@ -83,7 +106,7 @@ function SceneLayer({
               color: "rgba(244,239,230,0.45)",
             }}
           >
-            no clip yet
+            {useStills ? "no frame yet" : "no clip yet"}
           </span>
           <span
             style={{
@@ -181,9 +204,13 @@ export function PreviewComposition({
   showCaptions = true,
   emphasis = [],
   baseUrl = "",
+  imageIndices = [],
+  imageVersion = 0,
+  useStills = false,
 }: PreviewProps) {
   const { fps, durationInFrames } = useVideoConfig();
   const has = new Set(clipIndices);
+  const hasImg = new Set(imageIndices);
 
   return (
     <AbsoluteFill style={{ backgroundColor: "#000" }}>
@@ -200,8 +227,11 @@ export function PreviewComposition({
             <SceneLayer
               scene={s}
               hasClip={has.has(s.index)}
+              hasImage={hasImg.has(s.index)}
+              useStills={useStills}
               projectId={projectId}
               clipVersion={clipVersion}
+              imageVersion={imageVersion}
               baseUrl={baseUrl}
             />
           </Sequence>

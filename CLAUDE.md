@@ -94,7 +94,10 @@ So Claude is called in steps 1 and 3; ElevenLabs only in step 2; Gemini in step 
 ## Where things live
 
 - `src/app/page.tsx` — home: paste box, writing-style + art-style pickers,
-  project list. Client component; creates the `Project` and routes to studio.
+  project list. A **mode toggle** chooses "Rewrite a thread" (paste source → Claude
+  writes the script) or "Paste a script" (paste a finished narration → skip
+  `/api/story`: empty bible, no `redditText`, title via `deriveTitle`). Client
+  component; creates the `Project` and routes to studio.
 - `src/app/studio/[projectId]/page.tsx` → `src/components/Studio.tsx` — the
   orchestrator (script, bible, voiceover, scene generation, persistence).
 - `src/lib/types.ts` — shared types; `Project`, `Scene`, `MAX_CLIP_SECONDS`.
@@ -121,6 +124,15 @@ So Claude is called in steps 1 and 3; ElevenLabs only in step 2; Gemini in step 
   a long timeout. Both are set in the studio's **Image generation** section. The
   only place the app generates **stills**; gated behind `GEMINI_API_KEY`. (Video
   lives in `src/lib/grok.ts`, listed below.)
+- `src/lib/geminiBatch.ts` + `src/server/imageBatchPoller.ts` — **batch image
+  generation** via the Gemini Batch API (~50% cheaper, async): upload a JSONL of
+  keyed `GenerateContentRequest`s through the resumable File API →
+  `models/{model}:batchGenerateContent` → poll → download the results JSONL →
+  store each image. Mirrors the Grok clip-batch infra exactly: one
+  `image_batches` row per project (`ImageBatch` JSON), a background poller started
+  at boot + on submit, routes `POST/GET/DELETE /api/projects/[id]/images/batch`
+  (GET re-arms the poller defensively), UI `src/components/ImageBatchPanel.tsx`
+  (two actions: bible refs + scene frames). NOT metered (like all Gemini gen).
 - `src/lib/storage.ts` — **client** async wrapper over `/api/projects` (+ a
   one-time `migrateLegacy` from the old browser localStorage/IndexedDB); also the
   image helpers (`generateImage`, `imageUrl(…, id?)`, `listImages`,
@@ -141,20 +153,25 @@ So Claude is called in steps 1 and 3; ElevenLabs only in step 2; Gemini in step 
   one-time idempotent migration upgrades the old single-row-per-key table.
 - **Cost tracking** — `src/lib/pricing.ts` (`anthropicCost`: pure, cache-aware
   USD/MTok rates — edit when Anthropic pricing changes) → `src/server/usage.ts`
-  (`recordAnthropicUsage`: prices + logs, never throws) called from the `/api/story`
-  and `/api/scenes` handlers. `GET /api/usage[?projectId=]` returns a spend summary
-  (`totalUsd`, `byOperation`, `byModel`); the studio shows a per-project Claude
-  chip and the home page a global total. Both Claude calls return `{…, usage,
-  model }`; only Claude is metered so far.
+  (`recordAnthropicUsage`: prices + logs, never throws) called from every Claude
+  handler (`/api/story`, `/api/scenes`, `/api/projects/[id]/captions` emphasis,
+  `/api/projects/[id]/social`). `GET /api/usage[?projectId=]` returns a spend
+  summary (`totalUsd`, `byOperation`, `byModel`, `byProvider`); the studio shows a
+  per-project spend chip and the home page a global total. **Claude and Grok clips
+  are metered; Gemini image generation (incl. the image batch) is not.**
 - `src/app/api/projects/*` — project CRUD, `[id]/audio` GET/PUT,
   `[id]/clips` (list) + `[id]/clips/[index]` GET/PUT/DELETE +
   `[id]/clips/[index]/generate` (POST → Grok), and `[id]/images` (list +
   DELETE `?scope=` for bulk drop) + `[id]/images/generate` (POST) +
-  `[id]/images/[scope]/[key]` GET/DELETE (both take `?id=` for a specific
-  version) + `[id]/images/[scope]/[key]/versions` (GET list / POST set-master).
+  `[id]/images/[scope]/[key]` GET/**PUT** (upload your own still → new master
+  version)/DELETE (GET & DELETE take `?id=` for a specific version) +
+  `[id]/images/[scope]/[key]/versions` (GET list / POST set-master) +
+  `[id]/images/batch` (POST/GET/DELETE → Gemini image batch) + `[id]/social`
+  (POST → Claude caption + 5 hashtags).
   Regenerating scenes drops the old clips AND `scope:"scene"` stills (all
-  versions, keyed by index, so a re-cut invalidates them); `scope:"ref"` bible
-  images are keyed by entity id and kept.
+  versions, keyed by index, so a re-cut invalidates them) and clears
+  `Project.approvedScenes`; `scope:"ref"` bible images are keyed by entity id and
+  kept.
 - `src/components/Automate.tsx` — a slim **progress readout** shown under the
   script: a progress bar + one-line status across the four stages (voiceover,
   scenes, references, clips). It performs **no** actions — each stage is done in
@@ -168,12 +185,20 @@ So Claude is called in steps 1 and 3; ElevenLabs only in step 2; Gemini in step 
 - `src/components/SceneCard.tsx` — per-scene card: prompts, recipe, optional
   in-app starting-frame generation (`onGenerateImage`, passing that scene's
   `characterIds`/`locationIds` reference images to Gemini for cross-shot
-  consistency) and clip generation (`onGenerateClip` → Grok, enabled once the
-  frame exists), and the clip drop. The frame shows a **master slot** (drop
-  target) beside a **history strip** of every stored version: drag a thumbnail
-  onto the slot (or click) to promote it to master, ✕ to delete one version.
+  consistency), **`Upload`** your own still (`onUploadImage` → PUT, for frames
+  made outside the app) and clip generation (`onGenerateClip` → Grok, enabled
+  once the frame exists), and the clip drop. The frame shows a **master slot**
+  (drop target) beside a **history strip** of every stored version: drag a
+  thumbnail onto the slot (or click) to promote it to master, ✕ to delete one
+  version. An **`Approve`** button (`onApproveChange` → `Project.approvedScenes`)
+  collapses the card; a chevron expands/collapses without changing approval.
   Versioning is scene-frame only; the Visual bible is unchanged. Rendered by
   `SceneList`.
+- `src/components/SocialCard.tsx` — the **Caption & hashtags** section at the
+  bottom of the studio: one click writes a short post caption + 5 hashtags from
+  the script (`/api/projects/[id]/social` → Claude `generateSocialCaption`,
+  metered as operation `social`, persisted on `Project.social`), with per-piece +
+  "Copy all" copy buttons.
 - `src/lib/grok.ts` — `generateVideoAndWait`: submit + poll the async xAI video
   API, return the finished mp4 url. `GROK_VIDEO_MODEL` in `src/server/env.ts`;
   gated behind `XAI_API_KEY`. The only place the app generates video.
@@ -188,7 +213,9 @@ So Claude is called in steps 1 and 3; ElevenLabs only in step 2; Gemini in step 
   headless browser can reach clip/audio routes).
 - `src/components/PreviewPlayer.tsx` — runs the Remotion `<Player>` headless with the
   campfire controls + per-scene timeline; passes `captions`/`showCaptions` so the
-  preview matches the render WYSIWYG.
+  preview matches the render WYSIWYG. A **Clips/Stills toggle** (`useStills`) previews
+  the still starting frames instead of clips — preview-only; the MP4 render never
+  sets it, so the export always uses clips.
 - `src/remotion/{index.ts,Root.tsx}` — `registerRoot` + the `<Composition id="storyflow">`
   (`calculateMetadata` derives duration from the last scene's `tSpokenEnd`); the bundle
   entry for the renderer. Only the render script imports these — never Next.
@@ -250,3 +277,8 @@ commonjs`) and running with node — no app or keys needed.
   scenes button is disabled until one exists.
 - Editing the script after voicing flags it out-of-sync; regenerate the
   voiceover to re-align before recutting scenes.
+- **Gemini Batch API uses `BATCH_STATE_*` job states, not the docs' `JOB_STATE_*`**
+  (e.g. `BATCH_STATE_SUCCEEDED`). `geminiBatch.ts` normalizes by stripping the
+  `JOB_STATE_`/`BATCH_STATE_` prefix — compare on the bare phase, never the raw
+  string. The succeeded job's result file is at `response.responsesFile` (also
+  `metadata.output.responsesFile`); each result line carries our `key`.

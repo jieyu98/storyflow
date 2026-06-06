@@ -1,6 +1,6 @@
 "use client";
 
-import { type ReactNode, useEffect, useState } from "react";
+import { type ReactNode, useEffect, useRef, useState } from "react";
 import type { Scene } from "@/lib/types";
 import type { SceneRecipe } from "@/lib/recipe";
 import { composeImagePrompt } from "@/lib/styles";
@@ -15,7 +15,15 @@ import {
 import { formatClock } from "@/lib/text";
 import CopyButton from "./CopyButton";
 import ClipDrop from "./ClipDrop";
-import { ImageIcon, MotionIcon, PlayIcon, Spinner, TrashIcon } from "./icons";
+import {
+  CheckIcon,
+  ChevronDownIcon,
+  ImageIcon,
+  MotionIcon,
+  PlayIcon,
+  Spinner,
+  TrashIcon,
+} from "./icons";
 
 export default function SceneCard({
   scene,
@@ -29,8 +37,11 @@ export default function SceneCard({
   images,
   imageVersion = 0,
   onGenerateImage,
+  onUploadImage,
   onDeleteImage,
   onGenerateClip,
+  approved = false,
+  onApproveChange,
 }: {
   scene: Scene;
   styleId: string;
@@ -48,6 +59,7 @@ export default function SceneCard({
     prompt: string,
     referenceKeys?: string[],
   ) => Promise<void>;
+  onUploadImage?: (scope: ImageScope, key: string, file: File) => Promise<void>;
   onDeleteImage?: (scope: ImageScope, key: string) => Promise<void>;
   onGenerateClip?: (
     sceneIndex: number,
@@ -55,9 +67,20 @@ export default function SceneCard({
     duration?: number,
     aspectRatio?: string,
   ) => Promise<void>;
+  approved?: boolean;
+  onApproveChange?: (index: number, approved: boolean) => void;
 }) {
   const hasPrompts = Boolean(scene.imagePrompt);
   const composedImage = composeImagePrompt(scene.imagePrompt, styleId);
+
+  // Approving a scene collapses its card; the chevron expands/collapses freely
+  // without changing the approved flag (so you can re-check an approved scene).
+  const [collapsed, setCollapsed] = useState(approved);
+  function toggleApprove() {
+    const next = !approved;
+    onApproveChange?.(scene.index, next);
+    setCollapsed(next);
+  }
 
   const imgKey = String(scene.index);
   const hasImageProp = images?.has(`scene:${scene.index}`) ?? false;
@@ -101,6 +124,22 @@ export default function SceneCard({
       setImgErr(e instanceof Error ? e.message : "Generation failed.");
     } finally {
       setBusyImg(false);
+    }
+  }
+
+  // Upload a frame made outside the app (stored as a new master version).
+  const uploadRef = useRef<HTMLInputElement>(null);
+  const [busyUpload, setBusyUpload] = useState(false);
+  async function uploadFrame(file: File) {
+    if (!onUploadImage || !file.type.startsWith("image/")) return;
+    setBusyUpload(true);
+    setImgErr(null);
+    try {
+      await onUploadImage("scene", imgKey, file);
+    } catch (e) {
+      setImgErr(e instanceof Error ? e.message : "Upload failed.");
+    } finally {
+      setBusyUpload(false);
     }
   }
 
@@ -157,7 +196,11 @@ export default function SceneCard({
   }
 
   return (
-    <article className="surface flex overflow-hidden">
+    <article
+      className={`surface flex overflow-hidden ${
+        approved ? "ring-1 ring-mint-400/40" : ""
+      }`}
+    >
       <div className="sprockets flex w-14 shrink-0 flex-col items-center justify-between border-r border-[var(--line)] bg-ink-950/40 py-4">
         <span className="font-mono text-xs text-faint">
           {String(scene.index + 1).padStart(2, "0")}
@@ -182,14 +225,48 @@ export default function SceneCard({
             <span className="chip text-twilight-300">graphic</span>
           )}
           {scene.shotType && <span className="chip">{scene.shotType}</span>}
-          <button
-            type="button"
-            onClick={() => onPreview(scene)}
-            className="btn btn-ghost ml-auto !px-2.5 !py-1 !text-[0.65rem]"
-            title="Play this scene in the preview"
-          >
-            <PlayIcon width={11} height={11} /> Preview
-          </button>
+          <div className="ml-auto flex items-center gap-1.5">
+            <button
+              type="button"
+              onClick={() => onPreview(scene)}
+              className="btn btn-ghost !px-2.5 !py-1 !text-[0.65rem]"
+              title="Play this scene in the preview"
+            >
+              <PlayIcon width={11} height={11} /> Preview
+            </button>
+            {onApproveChange && (
+              <button
+                type="button"
+                onClick={toggleApprove}
+                className={`btn !px-2.5 !py-1 !text-[0.65rem] ${
+                  approved
+                    ? "border-mint-400/50 bg-mint-400/15 text-mint-400"
+                    : "btn-ghost"
+                }`}
+                title={
+                  approved
+                    ? "Approved — click to reopen"
+                    : "Approve this scene and collapse it"
+                }
+              >
+                <CheckIcon width={11} height={11} />
+                {approved ? "Approved" : "Approve"}
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={() => setCollapsed((c) => !c)}
+              className="btn btn-ghost !px-1.5 !py-1"
+              aria-label={collapsed ? "Expand scene" : "Collapse scene"}
+              title={collapsed ? "Expand" : "Collapse"}
+            >
+              <ChevronDownIcon
+                width={13}
+                height={13}
+                className={collapsed ? "" : "rotate-180"}
+              />
+            </button>
+          </div>
         </div>
 
         {scene.name && (
@@ -198,221 +275,255 @@ export default function SceneCard({
           </h4>
         )}
 
-        <p className="mt-1.5 text-sm leading-relaxed text-cream/90">
-          {scene.text}
-        </p>
-
-        <div className="mt-3 rounded-xl border border-twilight-500/25 bg-twilight-500/5 p-3">
-          <div className="mb-1.5 flex items-center gap-2">
-            <span className="text-xs font-semibold text-twilight-300">
-              Make this scene
-            </span>
-            <span className="chip text-twilight-300">{recipe.method}</span>
-          </div>
-          <ol className="space-y-1 text-xs leading-relaxed text-muted">
-            {recipe.steps.map((step, i) => (
-              <li key={i} className="flex gap-2">
-                <span className="font-mono text-twilight-300">{i + 1}.</span>
-                <span>{step}</span>
-              </li>
-            ))}
-          </ol>
-        </div>
-
-        {hasPrompts ? (
-          <div className="mt-4 space-y-3">
-            <div className="rounded-xl border border-[var(--line)] bg-ink-950/50 p-3">
-              <div className="mb-2 flex items-center justify-between gap-2">
-                <span className="flex items-center gap-1.5 text-xs font-semibold text-ember-300">
-                  <ImageIcon width={14} height={14} />
-                  Image prompt — starting frame
-                </span>
-                <div className="flex items-center gap-2">
-                  {canGenerate && (
-                    <button
-                      type="button"
-                      onClick={generate}
-                      disabled={busyImg}
-                      className="btn btn-ember !px-3 !py-1.5 !text-xs"
-                    >
-                      {busyImg ? (
-                        <>
-                          <Spinner width={13} height={13} /> Generating…
-                        </>
-                      ) : hasImage ? (
-                        "Regenerate"
-                      ) : (
-                        "Generate"
-                      )}
-                    </button>
-                  )}
-                  <CopyButton text={composedImage} />
-                </div>
-              </div>
-              {hasImage && (
-                <div className="mb-2 flex items-start gap-3">
-                  {/* Master slot — the active version; drop a thumbnail here to promote it. */}
-                  <div
-                    onDragOver={(e) => {
-                      e.preventDefault();
-                      if (!dragOver) setDragOver(true);
-                    }}
-                    onDragLeave={() => setDragOver(false)}
-                    onDrop={(e) => {
-                      e.preventDefault();
-                      setDragOver(false);
-                      const id = Number(e.dataTransfer.getData("text/plain"));
-                      if (id) void promote(id);
-                    }}
-                    className={`relative shrink-0 rounded-md ${
-                      dragOver ? "ring-2 ring-ember-400" : ""
-                    }`}
-                    title="Drag a version here to make it the master"
-                  >
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img
-                      src={imageUrl(projectId, "scene", imgKey, imageVersion)}
-                      alt={scene.name ?? `Scene ${scene.index + 1}`}
-                      className="aspect-[9/16] w-24 rounded-md border border-[var(--line)] object-cover"
-                    />
-                    <span className="absolute left-1 top-1 rounded bg-ink-950/80 px-1.5 py-0.5 font-mono text-[0.6rem] text-ember-300">
-                      Master
-                    </span>
-                  </div>
-
-                  <div className="min-w-0 flex-1">
-                    {/* History strip — every stored version, draggable; active is ringed. */}
-                    {versions.length > 1 && (
-                      <div className="flex flex-wrap gap-2">
-                        {versions.map((v) => (
-                          <div key={v.id} className="group relative">
-                            {/* eslint-disable-next-line @next/next/no-img-element */}
-                            <img
-                              src={imageUrl(projectId, "scene", imgKey, imageVersion, v.id)}
-                              alt={`Version ${v.id}`}
-                              draggable
-                              onDragStart={(e) =>
-                                e.dataTransfer.setData("text/plain", String(v.id))
-                              }
-                              onClick={() => void promote(v.id)}
-                              className={`aspect-[9/16] w-12 cursor-grab rounded border object-cover transition active:cursor-grabbing ${
-                                v.active
-                                  ? "border-ember-400 ring-1 ring-ember-400"
-                                  : "border-[var(--line)] opacity-80 hover:opacity-100"
-                              }`}
-                              title={
-                                v.active
-                                  ? "Current master"
-                                  : "Drag onto the master slot (or click) to promote"
-                              }
-                            />
-                            <button
-                              type="button"
-                              onClick={() => void removeVersion(v.id)}
-                              disabled={verBusy}
-                              className="absolute -right-1.5 -top-1.5 hidden h-4 w-4 items-center justify-center rounded-full bg-ink-950 text-[0.6rem] text-faint hover:text-ember-300 group-hover:flex"
-                              title="Delete this version"
-                            >
-                              ×
-                            </button>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                    <p className="mt-1.5 text-[0.62rem] text-faint">
-                      {versions.length > 1
-                        ? "Drag a version onto the master slot to promote it. The master seeds the clip."
-                        : "Regenerate to keep alternates here — the newest becomes the master."}
-                    </p>
-                    {onDeleteImage && (
-                      <button
-                        type="button"
-                        onClick={() => onDeleteImage("scene", imgKey)}
-                        className="btn btn-ghost mt-1 !px-2 !py-1 !text-xs"
-                      >
-                        <TrashIcon width={13} height={13} /> Remove all
-                      </button>
-                    )}
-                  </div>
-                </div>
-              )}
-              {imgErr && (
-                <p className="mb-2 text-xs text-ember-300">{imgErr}</p>
-              )}
-              {canGenerate && refKeys.length > 0 && (
-                <p className="mb-2 text-[0.68rem] text-faint">
-                  Uses {refKeys.length} reference
-                  {refKeys.length > 1 ? "s" : ""} for consistency (generate those
-                  first).
-                </p>
-              )}
-              <p className="whitespace-pre-wrap font-mono text-xs leading-relaxed text-muted">
-                {composedImage}
-              </p>
-            </div>
-            <PromptBlock
-              icon={<MotionIcon width={14} height={14} />}
-              label="Animation prompt"
-              text={scene.animationPrompt ?? ""}
-              accent="twilight"
-            />
-          </div>
+        {collapsed ? (
+          <p className="mt-1 truncate text-xs text-faint">{scene.text}</p>
         ) : (
-          <p className="mt-4 text-xs text-faint">
-            Prompts not written yet — hit “Write scene prompts”.
-          </p>
-        )}
-
-        {onGenerateClip && (
-          <div className="mt-4 rounded-xl border border-mint-400/25 bg-mint-400/5 p-3">
-            <div className="flex items-center justify-between gap-2">
-              <span className="flex items-center gap-1.5 text-xs font-semibold text-mint-400">
-                <MotionIcon width={14} height={14} />
-                Animate into a clip (Grok)
-              </span>
-              <button
-                type="button"
-                onClick={generateClip}
-                disabled={busyClip || !hasImage}
-                className="btn btn-ember !px-3 !py-1.5 !text-xs"
-                title={
-                  hasImage
-                    ? "Image → video from the starting frame"
-                    : "Generate the starting frame first"
-                }
-              >
-                {busyClip ? (
-                  <>
-                    <Spinner width={13} height={13} /> Animating…
-                  </>
-                ) : hasClip ? (
-                  "Regenerate clip"
-                ) : (
-                  "Generate clip"
-                )}
-              </button>
-            </div>
-            <p className="mt-1 text-[0.68rem] text-faint">
-              {hasImage
-                ? `Image → video from the starting frame, ${scene.assignedDuration}s, using the animation prompt. Takes ~20s+.`
-                : "Generate the starting frame above first, then animate it here."}
+          <>
+            <p className="mt-1.5 text-sm leading-relaxed text-cream/90">
+              {scene.text}
             </p>
-            {busyClip && (
-              <p className="mt-1 text-[0.68rem] text-mint-400">
-                Generating — keep this tab open; it can take a minute.
+
+            <div className="mt-3 rounded-xl border border-twilight-500/25 bg-twilight-500/5 p-3">
+              <div className="mb-1.5 flex items-center gap-2">
+                <span className="text-xs font-semibold text-twilight-300">
+                  Make this scene
+                </span>
+                <span className="chip text-twilight-300">{recipe.method}</span>
+              </div>
+              <ol className="space-y-1 text-xs leading-relaxed text-muted">
+                {recipe.steps.map((step, i) => (
+                  <li key={i} className="flex gap-2">
+                    <span className="font-mono text-twilight-300">{i + 1}.</span>
+                    <span>{step}</span>
+                  </li>
+                ))}
+              </ol>
+            </div>
+
+            {hasPrompts ? (
+              <div className="mt-4 space-y-3">
+                <div className="rounded-xl border border-[var(--line)] bg-ink-950/50 p-3">
+                  <div className="mb-2 flex items-center justify-between gap-2">
+                    <span className="flex items-center gap-1.5 text-xs font-semibold text-ember-300">
+                      <ImageIcon width={14} height={14} />
+                      Image prompt — starting frame
+                    </span>
+                    <div className="flex items-center gap-2">
+                      {canGenerate && (
+                        <button
+                          type="button"
+                          onClick={generate}
+                          disabled={busyImg}
+                          className="btn btn-ember !px-3 !py-1.5 !text-xs"
+                        >
+                          {busyImg ? (
+                            <>
+                              <Spinner width={13} height={13} /> Generating…
+                            </>
+                          ) : hasImage ? (
+                            "Regenerate"
+                          ) : (
+                            "Generate"
+                          )}
+                        </button>
+                      )}
+                      {onUploadImage && (
+                        <button
+                          type="button"
+                          onClick={() => uploadRef.current?.click()}
+                          disabled={busyUpload}
+                          className="btn btn-ghost !px-3 !py-1.5 !text-xs"
+                          title="Upload your own starting frame (made outside the app)"
+                        >
+                          {busyUpload ? (
+                            <>
+                              <Spinner width={13} height={13} /> Uploading…
+                            </>
+                          ) : (
+                            "Upload"
+                          )}
+                        </button>
+                      )}
+                      <CopyButton text={composedImage} />
+                      <input
+                        ref={uploadRef}
+                        type="file"
+                        accept="image/*"
+                        className="hidden"
+                        onChange={(e) => {
+                          const f = e.target.files?.[0];
+                          if (f) void uploadFrame(f);
+                          e.target.value = "";
+                        }}
+                      />
+                    </div>
+                  </div>
+                  {hasImage && (
+                    <div className="mb-2 flex items-start gap-3">
+                      {/* Master slot — the active version; drop a thumbnail here to promote it. */}
+                      <div
+                        onDragOver={(e) => {
+                          e.preventDefault();
+                          if (!dragOver) setDragOver(true);
+                        }}
+                        onDragLeave={() => setDragOver(false)}
+                        onDrop={(e) => {
+                          e.preventDefault();
+                          setDragOver(false);
+                          const id = Number(e.dataTransfer.getData("text/plain"));
+                          if (id) void promote(id);
+                        }}
+                        className={`relative shrink-0 rounded-md ${
+                          dragOver ? "ring-2 ring-ember-400" : ""
+                        }`}
+                        title="Drag a version here to make it the master"
+                      >
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img
+                          src={imageUrl(projectId, "scene", imgKey, imageVersion)}
+                          alt={scene.name ?? `Scene ${scene.index + 1}`}
+                          className="aspect-[9/16] w-24 rounded-md border border-[var(--line)] object-cover"
+                        />
+                        <span className="absolute left-1 top-1 rounded bg-ink-950/80 px-1.5 py-0.5 font-mono text-[0.6rem] text-ember-300">
+                          Master
+                        </span>
+                      </div>
+
+                      <div className="min-w-0 flex-1">
+                        {/* History strip — every stored version, draggable; active is ringed. */}
+                        {versions.length > 1 && (
+                          <div className="flex flex-wrap gap-2">
+                            {versions.map((v) => (
+                              <div key={v.id} className="group relative">
+                                {/* eslint-disable-next-line @next/next/no-img-element */}
+                                <img
+                                  src={imageUrl(projectId, "scene", imgKey, imageVersion, v.id)}
+                                  alt={`Version ${v.id}`}
+                                  draggable
+                                  onDragStart={(e) =>
+                                    e.dataTransfer.setData("text/plain", String(v.id))
+                                  }
+                                  onClick={() => void promote(v.id)}
+                                  className={`aspect-[9/16] w-12 cursor-grab rounded border object-cover transition active:cursor-grabbing ${
+                                    v.active
+                                      ? "border-ember-400 ring-1 ring-ember-400"
+                                      : "border-[var(--line)] opacity-80 hover:opacity-100"
+                                  }`}
+                                  title={
+                                    v.active
+                                      ? "Current master"
+                                      : "Drag onto the master slot (or click) to promote"
+                                  }
+                                />
+                                <button
+                                  type="button"
+                                  onClick={() => void removeVersion(v.id)}
+                                  disabled={verBusy}
+                                  className="absolute -right-1.5 -top-1.5 hidden h-4 w-4 items-center justify-center rounded-full bg-ink-950 text-[0.6rem] text-faint hover:text-ember-300 group-hover:flex"
+                                  title="Delete this version"
+                                >
+                                  ×
+                                </button>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                        <p className="mt-1.5 text-[0.62rem] text-faint">
+                          {versions.length > 1
+                            ? "Drag a version onto the master slot to promote it. The master seeds the clip."
+                            : "Regenerate to keep alternates here — the newest becomes the master."}
+                        </p>
+                        {onDeleteImage && (
+                          <button
+                            type="button"
+                            onClick={() => onDeleteImage("scene", imgKey)}
+                            className="btn btn-ghost mt-1 !px-2 !py-1 !text-xs"
+                          >
+                            <TrashIcon width={13} height={13} /> Remove all
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  )}
+                  {imgErr && (
+                    <p className="mb-2 text-xs text-ember-300">{imgErr}</p>
+                  )}
+                  {canGenerate && refKeys.length > 0 && (
+                    <p className="mb-2 text-[0.68rem] text-faint">
+                      Uses {refKeys.length} reference
+                      {refKeys.length > 1 ? "s" : ""} for consistency (generate those
+                      first).
+                    </p>
+                  )}
+                  <p className="whitespace-pre-wrap font-mono text-xs leading-relaxed text-muted">
+                    {composedImage}
+                  </p>
+                </div>
+                <PromptBlock
+                  icon={<MotionIcon width={14} height={14} />}
+                  label="Animation prompt"
+                  text={scene.animationPrompt ?? ""}
+                  accent="twilight"
+                />
+              </div>
+            ) : (
+              <p className="mt-4 text-xs text-faint">
+                Prompts not written yet — hit “Write scene prompts”.
               </p>
             )}
-            {clipErr && <p className="mt-1 text-xs text-ember-300">{clipErr}</p>}
-          </div>
-        )}
 
-        <ClipDrop
-          projectId={projectId}
-          sceneIndex={scene.index}
-          hasClip={hasClip}
-          version={clipVersion}
-          onChange={onClipChange}
-        />
+            {onGenerateClip && (
+              <div className="mt-4 rounded-xl border border-mint-400/25 bg-mint-400/5 p-3">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="flex items-center gap-1.5 text-xs font-semibold text-mint-400">
+                    <MotionIcon width={14} height={14} />
+                    Animate into a clip (Grok)
+                  </span>
+                  <button
+                    type="button"
+                    onClick={generateClip}
+                    disabled={busyClip || !hasImage}
+                    className="btn btn-ember !px-3 !py-1.5 !text-xs"
+                    title={
+                      hasImage
+                        ? "Image → video from the starting frame"
+                        : "Generate the starting frame first"
+                    }
+                  >
+                    {busyClip ? (
+                      <>
+                        <Spinner width={13} height={13} /> Animating…
+                      </>
+                    ) : hasClip ? (
+                      "Regenerate clip"
+                    ) : (
+                      "Generate clip"
+                    )}
+                  </button>
+                </div>
+                <p className="mt-1 text-[0.68rem] text-faint">
+                  {hasImage
+                    ? `Image → video from the starting frame, ${scene.assignedDuration}s, using the animation prompt. Takes ~20s+.`
+                    : "Generate the starting frame above first, then animate it here."}
+                </p>
+                {busyClip && (
+                  <p className="mt-1 text-[0.68rem] text-mint-400">
+                    Generating — keep this tab open; it can take a minute.
+                  </p>
+                )}
+                {clipErr && <p className="mt-1 text-xs text-ember-300">{clipErr}</p>}
+              </div>
+            )}
+
+            <ClipDrop
+              projectId={projectId}
+              sceneIndex={scene.index}
+              hasClip={hasClip}
+              version={clipVersion}
+              onChange={onClipChange}
+            />
+          </>
+        )}
       </div>
     </article>
   );

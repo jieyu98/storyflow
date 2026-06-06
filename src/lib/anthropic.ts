@@ -1,6 +1,8 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { ANTHROPIC_MODEL, serverEnv } from "@/server/env";
 import {
+  CAPTION_SYSTEM,
+  CAPTION_TOOL,
   EMPHASIS_SYSTEM,
   EMPHASIS_TOOL,
   SCENE_SYSTEM,
@@ -148,6 +150,46 @@ ${numberedWords(words)}`;
   return {
     beats: input.scenes ?? [],
     bibleAdditions: input.bibleAdditions ?? [],
+    usage: usageFromMessage(message),
+    model,
+  };
+}
+
+/** Write a short social caption + exactly 5 hashtags from the story script. */
+export async function generateSocialCaption(
+  story: { title?: string; coreTurn?: string; script: string },
+  modelOverride?: string,
+): Promise<{
+  description: string;
+  hashtags: string[];
+  usage: TokenUsage;
+  model: string;
+}> {
+  const model = modelOverride ?? ANTHROPIC_MODEL;
+  const userContent = `TITLE: ${story.title?.trim() || "(untitled)"}
+${story.coreTurn?.trim() ? `CORE TURN: ${story.coreTurn.trim()}\n` : ""}NARRATION:
+${story.script.trim()}`;
+  const message = await client().messages.create({
+    model,
+    max_tokens: 1024,
+    system: [
+      { type: "text", text: CAPTION_SYSTEM, cache_control: { type: "ephemeral" } },
+    ],
+    tools: [CAPTION_TOOL as unknown as Anthropic.Tool],
+    tool_choice: { type: "tool", name: CAPTION_TOOL.name },
+    messages: [{ role: "user", content: userContent }],
+  });
+  const input = extractToolInput(message, CAPTION_TOOL.name) as unknown as {
+    description?: string;
+    hashtags?: string[];
+  };
+  const hashtags = (input.hashtags ?? [])
+    .map((h) => h.replace(/^#+/, "").replace(/\s+/g, "").trim())
+    .filter(Boolean)
+    .slice(0, 5);
+  return {
+    description: (input.description ?? "").trim(),
+    hashtags,
     usage: usageFromMessage(message),
     model,
   };

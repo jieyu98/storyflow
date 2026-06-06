@@ -8,18 +8,22 @@ import {
   audioUrl,
   base64ToBytes,
   cancelClipBatch,
+  cancelImageBatch,
   deleteAllClips,
   deleteAllImages,
   deleteImage,
   generateCaptionEmphasis,
   generateClip,
   generateImage,
+  generateSocial,
   getClipBatch,
+  getImageBatch,
   getProject,
   getUsage,
   listClips,
   listImages,
   saveAudio,
+  uploadImage,
   upsertProject,
   type ImageScope,
   type UsageSummary,
@@ -32,6 +36,7 @@ import {
   IMAGE_MODELS,
   SCENE_MODELS,
   type ClipBatch,
+  type ImageBatch,
   type Project,
   type Scene,
   type SceneModelId,
@@ -39,6 +44,8 @@ import {
   type TtsModelId,
 } from "@/lib/types";
 import ScriptCard from "./ScriptCard";
+import SocialCard from "./SocialCard";
+import ImageBatchPanel from "./ImageBatchPanel";
 import VisualBibleView from "./VisualBibleView";
 import VoicePicker from "./VoicePicker";
 import VoiceoverPlayer from "./VoiceoverPlayer";
@@ -84,6 +91,7 @@ export default function Studio({ projectId }: { projectId: string }) {
   const [clips, setClips] = useState<Set<number>>(new Set());
   const [clipVersion, setClipVersion] = useState(0);
   const [clipBatch, setClipBatch] = useState<ClipBatch | null>(null);
+  const [imageBatch, setImageBatch] = useState<ImageBatch | null>(null);
   const [images, setImages] = useState<Set<string>>(new Set());
   const [imageVersion, setImageVersion] = useState(0);
   const [usage, setUsage] = useState<UsageSummary | null>(null);
@@ -93,6 +101,8 @@ export default function Studio({ projectId }: { projectId: string }) {
   const [regenerating, setRegenerating] = useState(false);
   const [voicing, setVoicing] = useState(false);
   const [cutting, setCutting] = useState(false);
+  const [generatingSocial, setGeneratingSocial] = useState(false);
+  const [socialError, setSocialError] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   /* ------------------------------ load project ----------------------------- */
@@ -120,6 +130,9 @@ export default function Studio({ projectId }: { projectId: string }) {
       });
       void getClipBatch(projectId).then((cb) => {
         if (!cancelled) setClipBatch(cb);
+      });
+      void getImageBatch(projectId).then((ib) => {
+        if (!cancelled) setImageBatch(ib);
       });
       void listImages(projectId).then((keys) => {
         if (!cancelled) setImages(new Set(keys));
@@ -272,6 +285,15 @@ export default function Studio({ projectId }: { projectId: string }) {
         void cancelClipBatch(projectId);
         setClipBatch(null);
       }
+      // Likewise, an open image batch with scene-frame requests is keyed by the
+      // old indices — cancel it. Ref-only batches stay valid and are left alone.
+      if (
+        imageBatch?.status === "open" &&
+        imageBatch.requests.some((r) => r.scope === "scene")
+      ) {
+        void cancelImageBatch(projectId);
+        setImageBatch(null);
+      }
       setClips(new Set());
       setClipVersion((v) => v + 1);
       setImages((prev) => {
@@ -287,6 +309,7 @@ export default function Studio({ projectId }: { projectId: string }) {
         ...p,
         scenes: next,
         visualBible: data.visualBible ?? p.visualBible,
+        approvedScenes: [], // a re-cut renumbers scenes — approvals are stale
       }));
       refreshUsage();
     } catch (e) {
@@ -316,6 +339,34 @@ export default function Studio({ projectId }: { projectId: string }) {
     setClipVersion((v) => v + 1);
   }
 
+  // Mark a scene approved/unapproved (collapses its card); persisted on the project.
+  function handleApproveChange(index: number, approved: boolean) {
+    save((p) => {
+      const set = new Set(p.approvedScenes ?? []);
+      if (approved) set.add(index);
+      else set.delete(index);
+      return { ...p, approvedScenes: Array.from(set).sort((a, b) => a - b) };
+    });
+  }
+
+  // Generate a post caption + 5 hashtags from the script; persist on the project.
+  // Billed Claude call → refresh the spend chip.
+  async function handleGenerateSocial() {
+    setGeneratingSocial(true);
+    setSocialError(null);
+    try {
+      const social = await generateSocial(projectId);
+      save((p) => ({ ...p, social }));
+      refreshUsage();
+    } catch (e) {
+      setSocialError(
+        e instanceof Error ? e.message : "Could not generate the caption.",
+      );
+    } finally {
+      setGeneratingSocial(false);
+    }
+  }
+
   // Let Claude pick which caption words to emphasize; persist the indices so the
   // preview + render highlight them. Billed Claude call → refresh the spend chip.
   async function handleGenerateEmphasis() {
@@ -334,6 +385,18 @@ export default function Studio({ projectId }: { projectId: string }) {
       return next;
     });
     setClipVersion((v) => v + 1);
+  }
+
+  // The image-batch poller stored some images server-side — reflect them in the
+  // UI. `keys` are `${scope}:${imageKey}` strings; merge + bump so thumbnails load.
+  function handleImagesSaved(keys: string[]) {
+    if (keys.length === 0) return;
+    setImages((prev) => {
+      const next = new Set(prev);
+      for (const k of keys) next.add(k);
+      return next;
+    });
+    setImageVersion((v) => v + 1);
   }
 
   function handlePreviewScene(scene: Scene) {
@@ -367,6 +430,14 @@ export default function Studio({ projectId }: { projectId: string }) {
       flex: project?.flexImages,
       imageModelId: project?.imageModelId,
     });
+    setImages((prev) => new Set(prev).add(`${scope}:${key}`));
+    setImageVersion((v) => v + 1);
+  }
+
+  // Upload a user-supplied image (made outside the app) as a scene frame / ref.
+  // Stored server-side as a new master version; mirror it into local state.
+  async function handleUploadImage(scope: ImageScope, key: string, file: File) {
+    await uploadImage(projectId, scope, key, file);
     setImages((prev) => new Set(prev).add(`${scope}:${key}`));
     setImageVersion((v) => v + 1);
   }
@@ -473,6 +544,7 @@ export default function Studio({ projectId }: { projectId: string }) {
           coreTurn={project.coreTurn}
           scriptModel={scriptModel}
           onScriptModelChange={handleScriptModelChange}
+          canRegenerate={Boolean(project.redditText?.trim())}
         />
 
         {script.trim() && (
@@ -669,6 +741,8 @@ export default function Studio({ projectId }: { projectId: string }) {
               projectId={projectId}
               clips={clips}
               clipVersion={clipVersion}
+              images={images}
+              imageVersion={imageVersion}
               duration={project.audioDuration}
               seekReq={seekReq}
               captions={words}
@@ -694,6 +768,24 @@ export default function Studio({ projectId }: { projectId: string }) {
             }
             emphasisCount={project.captionEmphasis?.length ?? 0}
             onGenerateEmphasis={handleGenerateEmphasis}
+          />
+        )}
+
+        {(project.visualBible.characters.length +
+          project.visualBible.locations.length >
+          0 ||
+          scenes.length > 0) && (
+          <ImageBatchPanel
+            projectId={projectId}
+            bible={project.visualBible}
+            scenes={scenes}
+            styleId={project.stylePresetId}
+            conceptStyleId={project.conceptStylePresetId}
+            imageModelId={project.imageModelId}
+            images={images}
+            imageBatch={imageBatch}
+            onImageBatchChange={setImageBatch}
+            onImagesSaved={handleImagesSaved}
           />
         )}
 
@@ -727,8 +819,21 @@ export default function Studio({ projectId }: { projectId: string }) {
             images={images}
             imageVersion={imageVersion}
             onGenerateImage={handleGenerateImage}
+            onUploadImage={handleUploadImage}
             onDeleteImage={handleDeleteImage}
             onGenerateClip={handleGenerateClip}
+            approved={new Set(project.approvedScenes ?? [])}
+            onApproveChange={handleApproveChange}
+          />
+        )}
+
+        {script.trim() && (
+          <SocialCard
+            description={project.social?.description}
+            hashtags={project.social?.hashtags}
+            onGenerate={handleGenerateSocial}
+            generating={generatingSocial}
+            error={socialError}
           />
         )}
       </div>

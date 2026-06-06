@@ -14,6 +14,7 @@ export default function ScriptCard({
   coreTurn,
   scriptModel,
   onScriptModelChange,
+  canRegenerate = true,
 }: {
   script: string;
   onChange: (value: string) => void;
@@ -24,6 +25,8 @@ export default function ScriptCard({
   coreTurn?: string;
   scriptModel: StoryModelId;
   onScriptModelChange: (id: StoryModelId) => void;
+  /** False for pasted scripts (no source text to rewrite from). */
+  canRegenerate?: boolean;
 }) {
   const words = countWords(script);
   const seconds = audioDuration ? audioDuration : estSeconds(script);
@@ -32,46 +35,50 @@ export default function ScriptCard({
     <section className="surface p-5 sm:p-6">
       <div className="flex items-center justify-between gap-3">
         <p className="eyebrow">Narration script</p>
-        <button
-          type="button"
-          onClick={onRegenerate}
-          disabled={regenerating}
-          className="btn btn-ghost !px-3 !py-1.5 !text-xs"
-        >
-          {regenerating ? (
-            <>
-              <Spinner width={14} height={14} /> Rewriting…
-            </>
-          ) : (
-            <>
-              <RefreshIcon width={14} height={14} /> Rewrite
-            </>
-          )}
-        </button>
+        {canRegenerate && (
+          <button
+            type="button"
+            onClick={onRegenerate}
+            disabled={regenerating}
+            className="btn btn-ghost !px-3 !py-1.5 !text-xs"
+          >
+            {regenerating ? (
+              <>
+                <Spinner width={14} height={14} /> Rewriting…
+              </>
+            ) : (
+              <>
+                <RefreshIcon width={14} height={14} /> Rewrite
+              </>
+            )}
+          </button>
+        )}
       </div>
 
-      <div className="mt-3 flex items-center gap-2">
-        <span className="text-xs text-faint">Model</span>
-        <div className="flex gap-1.5">
-          {STORY_MODELS.map((m) => {
-            const active = m.id === scriptModel;
-            return (
-              <button
-                key={m.id}
-                type="button"
-                onClick={() => onScriptModelChange(m.id)}
-                disabled={regenerating}
-                title={m.blurb}
-                className={`btn !px-2.5 !py-1 !text-xs ${
-                  active ? "btn-ember" : "btn-ghost opacity-80"
-                }`}
-              >
-                {m.name}
-              </button>
-            );
-          })}
+      {canRegenerate && (
+        <div className="mt-3 flex items-center gap-2">
+          <span className="text-xs text-faint">Model</span>
+          <div className="flex gap-1.5">
+            {STORY_MODELS.map((m) => {
+              const active = m.id === scriptModel;
+              return (
+                <button
+                  key={m.id}
+                  type="button"
+                  onClick={() => onScriptModelChange(m.id)}
+                  disabled={regenerating}
+                  title={m.blurb}
+                  className={`btn !px-2.5 !py-1 !text-xs ${
+                    active ? "btn-ember" : "btn-ghost opacity-80"
+                  }`}
+                >
+                  {m.name}
+                </button>
+              );
+            })}
+          </div>
         </div>
-      </div>
+      )}
 
       {coreTurn && (
         <p className="mt-3 border-l-2 border-ember-500/50 pl-3 font-display text-sm italic leading-relaxed text-ember-300/90">

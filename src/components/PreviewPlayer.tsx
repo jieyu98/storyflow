@@ -19,6 +19,8 @@ export default function PreviewPlayer({
   projectId,
   clips,
   clipVersion,
+  images,
+  imageVersion,
   duration,
   seekReq,
   captions,
@@ -30,6 +32,9 @@ export default function PreviewPlayer({
   projectId: string;
   clips: Set<number>;
   clipVersion: number;
+  /** All generated-image keys as `${scope}:${key}` (we use the `scene:` ones). */
+  images: Set<string>;
+  imageVersion: number;
   duration?: number;
   seekReq?: { t: number; n: number } | null;
   captions?: Word[];
@@ -40,6 +45,14 @@ export default function PreviewPlayer({
   const [mounted, setMounted] = useState(false);
   const [playing, setPlaying] = useState(false);
   const [frame, setFrame] = useState(0);
+  // Preview using the still starting frames instead of the clips.
+  const [useStills, setUseStills] = useState(false);
+
+  // Scene indices that have a generated starting-frame still.
+  const imageIndices = useMemo(
+    () => scenes.filter((s) => images.has(`scene:${s.index}`)).map((s) => s.index),
+    [scenes, images],
+  );
 
   const durSec =
     duration ?? (scenes.length ? scenes[scenes.length - 1].tSpokenEnd : 0);
@@ -52,15 +65,30 @@ export default function PreviewPlayer({
     () => ({
       scenes,
       clipIndices: Array.from(clips),
+      imageIndices,
       projectId,
       clipVersion,
+      imageVersion,
+      useStills,
       audioSrc,
       captions: captions ?? [],
       showCaptions,
       emphasis: emphasis ?? [],
       baseUrl: "", // relative URLs resolve against the page origin in the Player
     }),
-    [scenes, clips, projectId, clipVersion, audioSrc, captions, showCaptions, emphasis],
+    [
+      scenes,
+      clips,
+      imageIndices,
+      projectId,
+      clipVersion,
+      imageVersion,
+      useStills,
+      audioSrc,
+      captions,
+      showCaptions,
+      emphasis,
+    ],
   );
 
   function sceneAt(t: number): number {
@@ -122,6 +150,7 @@ export default function PreviewPlayer({
   const idx = sceneAt(time);
   const pct = totalFrames ? (frame / totalFrames) * 100 : 0;
   const uploaded = scenes.filter((s) => clips.has(s.index)).length;
+  const shown = useStills ? imageIndices.length : uploaded;
 
   return (
     <div>
@@ -223,12 +252,35 @@ export default function PreviewPlayer({
           <span className="text-faint/50">/ {formatTime(dur)}</span>
         </span>
         <div className="flex-1" />
+        {/* Clips vs stills preview toggle */}
+        <div className="inline-flex rounded-lg border border-[var(--line)] bg-ink-900/60 p-0.5">
+          {(
+            [
+              ["clips", "Clips"],
+              ["stills", "Stills"],
+            ] as const
+          ).map(([val, label]) => {
+            const on = (val === "stills") === useStills;
+            return (
+              <button
+                key={val}
+                type="button"
+                onClick={() => setUseStills(val === "stills")}
+                className={`rounded-md px-2.5 py-1 text-[0.62rem] font-medium transition ${
+                  on ? "bg-ember-500 text-[#25150a]" : "text-faint hover:text-cream"
+                }`}
+              >
+                {label}
+              </button>
+            );
+          })}
+        </div>
         <span
           className={`font-mono text-[0.65rem] ${
-            uploaded === scenes.length ? "text-mint-400" : "text-faint"
+            shown === scenes.length ? "text-mint-400" : "text-faint"
           }`}
         >
-          {uploaded}/{scenes.length} clips
+          {shown}/{scenes.length} {useStills ? "frames" : "clips"}
         </span>
       </div>
     </div>

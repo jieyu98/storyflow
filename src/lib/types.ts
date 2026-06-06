@@ -113,6 +113,10 @@ export type Project = {
   renderCaptions?: boolean;
   /** Word indices (into the alignment word list) Claude chose to emphasize. */
   captionEmphasis?: number[];
+  /** Scene indices the user has marked "approved" (collapses the scene card). */
+  approvedScenes?: number[];
+  /** AI-written post caption + 5 hashtags for TikTok/Reels (see /api/.../social). */
+  social?: { description: string; hashtags: string[] };
 };
 
 /* ---------------------------- clip batch (Grok) --------------------------- */
@@ -142,6 +146,40 @@ export type ClipBatch = {
   counts?: { total: number; pending: number; success: number; error: number };
   /** Cumulative cost (ticks, 1e-10 USD) already metered — guards double-charging. */
   costTicks?: number;
+};
+
+/* ----------------------- image batch (Gemini Nano Banana) ----------------- */
+// Async Gemini Batch API job that generates many images (bible references and/or
+// scene starting frames) at once for 50% of the interactive cost. Like ClipBatch
+// it lives in its own `image_batches` DB table (NOT on the Project JSON) because a
+// server-side poller writes it concurrently with the client's project saves.
+
+export type ImageBatchReqState = "pending" | "downloaded" | "failed";
+
+export type ImageBatchRequest = {
+  /** "ref" (bible entity) or "scene" (starting frame) — the image scope. */
+  scope: "ref" | "scene";
+  /** Entity id (ref) or scene index as text (scene) — the image storage key. */
+  imageKey: string;
+  /** JSONL `key` — unique within the batch, maps a result line back to here. */
+  batchKey: string;
+  /** Human label for the progress chips (entity name or scene number). */
+  label: string;
+  state: ImageBatchReqState;
+  error?: string;
+};
+
+export type ImageBatch = {
+  /** Gemini long-running job name, e.g. "batches/abc123". */
+  batchId: string;
+  /** Uploaded JSONL input file name ("files/…"), kept for reference. */
+  inputFile?: string;
+  createdAt: number;
+  /** "open" until the job reaches a terminal state and results are stored. */
+  status: "open" | "complete" | "cancelled" | "failed";
+  requests: ImageBatchRequest[];
+  /** Latest Gemini job state (JOB_STATE_*) for display while open. */
+  jobState?: string;
 };
 
 /** Trimmed voice shape surfaced to the client by /api/voices. */

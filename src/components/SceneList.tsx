@@ -24,8 +24,11 @@ export default function SceneList({
   images,
   imageVersion,
   onGenerateImage,
+  onUploadImage,
   onDeleteImage,
   onGenerateClip,
+  approved,
+  onApproveChange,
 }: {
   scenes: Scene[];
   styleId: string;
@@ -46,6 +49,11 @@ export default function SceneList({
     prompt: string,
     referenceKeys?: string[],
   ) => Promise<void>;
+  onUploadImage?: (
+    scope: ImageScope,
+    key: string,
+    file: File,
+  ) => Promise<void>;
   onDeleteImage?: (scope: ImageScope, key: string) => Promise<void>;
   onGenerateClip?: (
     sceneIndex: number,
@@ -53,6 +61,8 @@ export default function SceneList({
     duration?: number,
     aspectRatio?: string,
   ) => Promise<void>;
+  approved?: Set<number>;
+  onApproveChange?: (index: number, approved: boolean) => void;
 }) {
   if (scenes.length === 0) return null;
 
@@ -108,8 +118,11 @@ export default function SceneList({
           images={images}
           imageVersion={imageVersion}
           onGenerateImage={onGenerateImage}
+          onUploadImage={onUploadImage}
           onDeleteImage={onDeleteImage}
           onGenerateClip={onGenerateClip}
+          approved={approved?.has(s.index) ?? false}
+          onApproveChange={onApproveChange}
         />
       ))}
     </div>

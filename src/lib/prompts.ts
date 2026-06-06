@@ -87,7 +87,7 @@ imagePrompt — the STARTING FRAME (a single still image), in vivid natural lang
 - Use the narrator ONLY for beats truly about them or their reaction. Never put the narrator in more than two beats in a row — most beats should have no narrator at all (that is good).
 - VARY THE SUBJECT and the shot type across beats — objects, environments, other people, details, symbolic frames; never the same subject or the same framing two beats running.
 - CAPTION SAFE ZONE — subtitles are overlaid across the bottom ~30% of the frame, so that band must be COMPLETELY EMPTY background: no text, title, caption sentence, label, or graphic of any kind in it. Keep the key subject and every element of the frame within the top ~70% of the 9:16 frame. Do NOT add a title banner, a caption sentence, or any baked-in text anywhere. Never run content edge-to-edge to the bottom; compose a little high.
-- CONSISTENCY: WHENEVER a recurring character or location IS in frame, refer to them by their bible NAME, state "the same [Name], identical to earlier scenes," then weave in their exact fixed description verbatim — so they look identical every time they appear.
+- CONSISTENCY: WHENEVER a recurring character or location IS in frame, refer to them by their bible NAME and weave in their exact fixed description verbatim, so they render identically every time. Each frame is generated on its own with that entity's reference image attached — that reference image plus the verbatim description are what lock the look, so spell out the fixed appearance in full and you may add "matching its reference". Do NOT write "identical to earlier scenes": the single-image generator has no other scenes to compare against, so it does nothing.
 - Do NOT mention art style, medium, render engine, or quality tags — a style block is appended automatically afterward.
 
 animationPrompt — how the still MOVES over its clip (for an image-to-video tool):
@@ -130,7 +130,7 @@ imagePrompt — the STARTING FRAME (a single still image), in vivid natural lang
 - The OBJECT, ACTION, or DIAGRAM is the hero — most beats should have NO person in them at all. If a hand or figure is needed to demonstrate, keep it a neutral, anonymous demonstrator (hands, a partial figure); never invent a narrator or talking head, and never put a face in a beat that doesn't need one.
 - NO REPETITION — this is the most important rule. Every beat must look clearly DIFFERENT from its neighbors at a glance on a phone. Never repeat the same subject, composition, or shotType in two beats running, and do not lean on any single subject across the video. If you have already shown something, find a genuinely new representation — a cutaway, a diagram, a different object, a radically different scale or angle — rather than repeating it. Subtle differences (slightly darker liquid, warmer light, a tiny change of angle) do NOT count as variety.
 - CAPTION SAFE ZONE — subtitles are overlaid across the bottom ~30% of the frame, so that band must be COMPLETELY EMPTY background: no text, title, caption sentence, label, or graphic of any kind in it. Keep the key subject — and for a diagram, EVERY element (core visual, arrows, icons, cutaways, and any short labels) — within the top ~70% of the 9:16 frame. Do NOT add a title banner or a descriptive caption sentence anywhere; for a diagram use only short one-or-two-word inline labels beside the elements they mark, never a sentence. Never run content edge-to-edge to the bottom; compose a little high.
-- CONSISTENCY: when a recurring object or location from the bible appears, refer to it by its bible NAME and weave in its exact fixed description verbatim. On its FIRST appearance just establish it; from the SECOND appearance onward, add "the same [Name], identical to the earlier scene" so it looks identical every time. (Diagrams and abstract explanatory beats need not match a bible entry.)
+- CONSISTENCY: when a recurring object or location from the bible appears, refer to it by its bible NAME and weave in its exact fixed description verbatim, so it renders identically every time. Each frame is generated on its own with that entity's reference image attached — that reference image plus the verbatim description are what lock the look, so spell out the fixed appearance in full and you may add "matching its reference". Do NOT write "identical to the earlier scene": the single-image generator has no other scenes to compare against, so it does nothing. (Diagrams and abstract explanatory beats need not match a bible entry.)
 - Do NOT mention art style, medium, render engine, or quality tags — a style block is appended automatically afterward.
 
 animationPrompt — how the still MOVES over its clip (for an image-to-video tool):
@@ -265,5 +265,35 @@ export const EMPHASIS_TOOL = {
       },
     },
     required: ["indices"],
+  },
+} as const;
+
+/* --- social caption + hashtags (`/api/projects/[id]/social`) --- */
+
+export const CAPTION_SYSTEM = `You write the posting caption + hashtags for a short-form vertical video (TikTok / Reels / Shorts), given its narration script.
+
+Return via the emit_caption tool:
+- description: a SHORT caption (1–2 sentences, ~150 characters max) that hooks a scroller and captures the emotional core of the story. Prefer ending on a question or a gut-punch line that invites comments. MATCH the story's tone — never force hype on a sad or reflective story. Natural, spoken language. At most one tasteful emoji. Do NOT put any hashtags inside the description.
+- hashtags: EXACTLY 5 hashtags, each WITHOUT the leading "#", lowercase, no spaces or punctuation. Mix 1–2 broad discovery tags with 3–4 niche tags specific to this story's topic and audience. No spammy, banned, or engagement-bait tags.`;
+
+export const CAPTION_TOOL = {
+  name: "emit_caption",
+  description: "Return a short social caption and exactly 5 hashtags.",
+  input_schema: {
+    type: "object" as const,
+    properties: {
+      description: {
+        type: "string",
+        description:
+          "Short post caption (1–2 sentences). No hashtags inside it. At most one emoji.",
+      },
+      hashtags: {
+        type: "array",
+        items: { type: "string" },
+        description:
+          "Exactly 5 hashtags WITHOUT the leading '#', lowercase, no spaces (e.g. 'followyourpassion').",
+      },
+    },
+    required: ["description", "hashtags"],
   },
 } as const;

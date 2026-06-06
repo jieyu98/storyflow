@@ -4,6 +4,7 @@ import {
   deleteImageVersion,
   getImage,
   getImageVersion,
+  saveImage,
 } from "@/server/db";
 import { apiError } from "@/lib/http";
 
@@ -11,6 +12,33 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 type Ctx = { params: Promise<{ id: string; scope: string; key: string }> };
+
+// Upload your own image (generated outside the app) as this key's frame. Stored
+// as a new active version, exactly like an in-app generation — the old versions
+// are kept and the upload becomes the master.
+export async function PUT(req: Request, { params }: Ctx) {
+  try {
+    const { id, scope, key } = await params;
+    if (scope !== "scene" && scope !== "ref") {
+      return NextResponse.json({ error: "Unknown image scope." }, { status: 400 });
+    }
+    const mime = req.headers.get("content-type") || "image/png";
+    if (!mime.startsWith("image/")) {
+      return NextResponse.json(
+        { error: "Expected an image file." },
+        { status: 400 },
+      );
+    }
+    const buf = Buffer.from(await req.arrayBuffer());
+    if (buf.length === 0) {
+      return NextResponse.json({ error: "Empty upload." }, { status: 400 });
+    }
+    saveImage(id, scope, decodeURIComponent(key), mime, buf);
+    return NextResponse.json({ ok: true, mime });
+  } catch (err) {
+    return apiError(err);
+  }
+}
 
 export async function GET(req: Request, { params }: Ctx) {
   try {

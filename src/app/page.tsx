@@ -25,11 +25,14 @@ import {
   type Project,
   type StoryModelId,
 } from "@/lib/types";
-import { countWords, formatUsd } from "@/lib/text";
+import { countWords, deriveTitle, formatUsd } from "@/lib/text";
+
+type SourceMode = "thread" | "script";
 
 export default function HomePage() {
   const router = useRouter();
   const [text, setText] = useState("");
+  const [mode, setMode] = useState<SourceMode>("thread");
   const [styleId, setStyleId] = useState(DEFAULT_STYLE_ID);
   const [scriptStyleId, setScriptStyleId] = useState(DEFAULT_SCRIPT_STYLE_ID);
   const [scriptModelId, setScriptModelId] =
@@ -64,6 +67,33 @@ export default function HomePage() {
     setError(null);
     setLoading(true);
     try {
+      // Paste mode: the user supplied the finished narration — no AI rewrite.
+      // Skip /api/story entirely; start with an empty bible (scene cutting mints
+      // entities as needed) and no source text (so the studio hides Rewrite).
+      if (mode === "script") {
+        const now = Date.now();
+        const id = newProjectId();
+        const script = text.trim();
+        const project: Project = {
+          id,
+          title: deriveTitle(script),
+          createdAt: now,
+          updatedAt: now,
+          redditText: "",
+          script,
+          visualBible: { characters: [], locations: [] },
+          scriptStyleId,
+          scriptModelId,
+          stylePresetId: styleId,
+          conceptStylePresetId:
+            getScriptStyle(scriptStyleId).recommendedConceptStyleId,
+          scenes: [],
+        };
+        await upsertProject(project);
+        router.push(`/studio/${project.id}`);
+        return;
+      }
+
       // Mint the id up front so the (billed) story call is attributed to this
       // project, even though the project row is saved after the response.
       const id = newProjectId();
@@ -146,14 +176,37 @@ export default function HomePage() {
         className="surface mt-9 rise p-5 sm:p-6"
         style={{ animationDelay: "140ms" }}
       >
-        <label htmlFor="reddit" className="eyebrow">
-          Source text
-        </label>
+        <div className="mb-4 inline-flex rounded-xl border border-white/10 bg-white/5 p-1">
+          {(
+            [
+              { id: "thread", label: "Rewrite a thread" },
+              { id: "script", label: "Paste a script" },
+            ] as { id: SourceMode; label: string }[]
+          ).map((m) => (
+            <button
+              key={m.id}
+              type="button"
+              onClick={() => setMode(m.id)}
+              className={`rounded-lg px-3 py-1.5 text-xs font-medium transition ${
+                mode === m.id
+                  ? "bg-ember-500 text-[#25150a]"
+                  : "text-muted hover:text-cream"
+              }`}
+            >
+              {m.label}
+            </button>
+          ))}
+        </div>
+
         <textarea
           id="reddit"
           value={text}
           onChange={(e) => setText(e.target.value)}
-          placeholder="Paste the Reddit post here — AITA confessions, r/nosleep, glow-ups, revenge arcs. The messier the better; we'll tighten it."
+          placeholder={
+            mode === "thread"
+              ? "Paste the Reddit post here — AITA confessions, r/nosleep, glow-ups, revenge arcs. The messier the better; we'll tighten it."
+              : "Paste your finished narration — exactly the words to be voiced. No AI rewrite: we voice it as-is, then cut it into timed scenes."
+          }
           rows={9}
           className="field mt-3"
           spellCheck={false}
@@ -167,8 +220,9 @@ export default function HomePage() {
             onChange={handleScriptStyle}
           />
           <p className="mt-2 text-xs text-faint">
-            How the narration is written. Sets a starting clip-length mix you can
-            change later.
+            {mode === "thread"
+              ? "How the narration is written. Sets a starting clip-length mix you can change later."
+              : "Your wording is kept as-is — this only picks how the script is cut into scenes and recommends an art style."}
           </p>
         </div>
 
@@ -185,31 +239,33 @@ export default function HomePage() {
           </p>
         </div>
 
-        <div className="mt-5">
-          <p className="eyebrow mb-2">Script model</p>
-          <div className="grid grid-cols-3 gap-2">
-            {STORY_MODELS.map((m) => {
-              const active = m.id === scriptModelId;
-              return (
-                <button
-                  key={m.id}
-                  type="button"
-                  onClick={() => setScriptModelId(m.id)}
-                  title={m.blurb}
-                  className={`btn !px-3 !py-2 !text-xs ${
-                    active ? "btn-ember" : "btn-ghost opacity-80"
-                  }`}
-                >
-                  {m.name}
-                </button>
-              );
-            })}
+        {mode === "thread" && (
+          <div className="mt-5">
+            <p className="eyebrow mb-2">Script model</p>
+            <div className="grid grid-cols-3 gap-2">
+              {STORY_MODELS.map((m) => {
+                const active = m.id === scriptModelId;
+                return (
+                  <button
+                    key={m.id}
+                    type="button"
+                    onClick={() => setScriptModelId(m.id)}
+                    title={m.blurb}
+                    className={`btn !px-3 !py-2 !text-xs ${
+                      active ? "btn-ember" : "btn-ghost opacity-80"
+                    }`}
+                  >
+                    {m.name}
+                  </button>
+                );
+              })}
+            </div>
+            <p className="mt-2 text-xs text-faint">
+              Which Claude writes the narration. Opus is the richest; Haiku the
+              cheapest.
+            </p>
           </div>
-          <p className="mt-2 text-xs text-faint">
-            Which Claude writes the narration. Opus is the richest; Haiku the
-            cheapest.
-          </p>
-        </div>
+        )}
 
         {error && (
           <p className="mt-4 rounded-xl border border-ember-600/40 bg-ember-600/10 px-4 py-2.5 text-sm text-ember-300">
@@ -219,7 +275,11 @@ export default function HomePage() {
 
         <div className="mt-5 flex flex-wrap items-center justify-between gap-3">
           <span className="text-xs text-faint">
-            {words > 0 ? `${words} words pasted` : "Awaiting your thread"}
+            {words > 0
+              ? `${words} words pasted`
+              : mode === "thread"
+                ? "Awaiting your thread"
+                : "Awaiting your script"}
           </span>
           <button
             type="button"
@@ -229,11 +289,13 @@ export default function HomePage() {
           >
             {loading ? (
               <>
-                <Spinner width={16} height={16} /> Writing the script…
+                <Spinner width={16} height={16} />{" "}
+                {mode === "thread" ? "Writing the script…" : "Opening studio…"}
               </>
             ) : (
               <>
-                <SparkIcon width={16} height={16} /> Write the script
+                <SparkIcon width={16} height={16} />{" "}
+                {mode === "thread" ? "Write the script" : "Use this script"}
                 <ArrowIcon width={16} height={16} />
               </>
             )}
