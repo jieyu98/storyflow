@@ -60,7 +60,8 @@ export default function ImageBatchPanel({
 
   const [refSel, setRefSel] = useState<Set<string>>(new Set());
   const [sceneSel, setSceneSel] = useState<Set<number>>(new Set());
-  const [busy, setBusy] = useState(false);
+  // Which group is currently submitting (so only that button shows a spinner).
+  const [busyScope, setBusyScope] = useState<"ref" | "scene" | null>(null);
   const [error, setError] = useState<string | null>(null);
   // batchKeys already reported up to Studio, so we only bump on newly stored ones.
   const reportedRef = useRef<Set<string>>(new Set());
@@ -147,9 +148,12 @@ export default function ImageBatchPanel({
       }));
   }
 
-  async function submit(requests: ImageBatchRequestInput[]) {
-    if (busy || requests.length === 0) return;
-    setBusy(true);
+  async function submit(
+    requests: ImageBatchRequestInput[],
+    scope: "ref" | "scene",
+  ) {
+    if (busyScope || requests.length === 0) return;
+    setBusyScope(scope);
     setError(null);
     try {
       const { imageBatch: b } = await submitImageBatch(
@@ -162,7 +166,7 @@ export default function ImageBatchPanel({
     } catch (e) {
       setError(e instanceof Error ? e.message : "Could not submit the batch.");
     } finally {
-      setBusy(false);
+      setBusyScope(null);
     }
   }
 
@@ -209,12 +213,13 @@ export default function ImageBatchPanel({
               }
               onAll={() => setRefSel(new Set(entities.map((e) => e.entity.id)))}
               onNone={() => setRefSel(new Set())}
-              busy={busy}
+              busy={busyScope !== null}
+              submitting={busyScope === "ref"}
               lastBatch={imageBatch}
               scope="ref"
-              onSubmit={() => submit(refInputs(refSel))}
+              onSubmit={() => submit(refInputs(refSel), "ref")}
               onRetryFailed={(keys) =>
-                submit(refInputs(new Set(keys as string[])))
+                submit(refInputs(new Set(keys as string[])), "ref")
               }
             />
 
@@ -238,13 +243,15 @@ export default function ImageBatchPanel({
                 }
                 onAll={() => setSceneSel(new Set(scenes.map((s) => s.index)))}
                 onNone={() => setSceneSel(new Set())}
-                busy={busy}
+                busy={busyScope !== null}
+                submitting={busyScope === "scene"}
                 lastBatch={imageBatch}
                 scope="scene"
-                onSubmit={() => submit(sceneInputs(sceneSel))}
+                onSubmit={() => submit(sceneInputs(sceneSel), "scene")}
                 onRetryFailed={(keys) =>
                   submit(
                     sceneInputs(new Set((keys as string[]).map((k) => Number(k)))),
+                    "scene",
                   )
                 }
                 mono
@@ -330,6 +337,7 @@ function SelectGroup({
   onAll,
   onNone,
   busy,
+  submitting,
   lastBatch,
   scope,
   onSubmit,
@@ -343,7 +351,10 @@ function SelectGroup({
   onToggle: (id: GroupId) => void;
   onAll: () => void;
   onNone: () => void;
+  /** True while EITHER group is submitting — disables this group's button. */
   busy: boolean;
+  /** True only while THIS group is submitting — shows the spinner. */
+  submitting: boolean;
   lastBatch: ImageBatch | null;
   scope: "ref" | "scene";
   onSubmit: () => void;
@@ -429,7 +440,7 @@ function SelectGroup({
         disabled={busy || selected.size === 0}
         className="btn btn-ember mt-3 !px-4 !py-2 !text-xs"
       >
-        {busy ? (
+        {submitting ? (
           <>
             <Spinner width={13} height={13} /> Submitting…
           </>
