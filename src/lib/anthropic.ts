@@ -224,8 +224,15 @@ ${story.script.trim()}`;
     .map((h) => h.replace(/^#+/, "").replace(/\s+/g, "").trim())
     .filter(Boolean)
     .slice(0, 5);
+  // Safety net: strip any em/en dashes the model slips in (→ comma), collapse
+  // doubled punctuation/spaces.
+  const description = (input.description ?? "")
+    .replace(/\s*[—–]\s*/g, ", ")
+    .replace(/\s*,\s*,/g, ",")
+    .replace(/\s{2,}/g, " ")
+    .trim();
   return {
-    description: (input.description ?? "").trim(),
+    description,
     hashtags,
     usage: usageFromMessage(message),
     model,

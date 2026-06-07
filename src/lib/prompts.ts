@@ -273,7 +273,7 @@ export const EMPHASIS_TOOL = {
 export const CAPTION_SYSTEM = `You write the posting caption + hashtags for a short-form vertical video (TikTok / Reels / Shorts), given its narration script.
 
 Return via the emit_caption tool:
-- description: a SHORT caption (1–2 sentences, ~150 characters max) that hooks a scroller and captures the emotional core of the story. Prefer ending on a question or a gut-punch line that invites comments. MATCH the story's tone — never force hype on a sad or reflective story. Natural, spoken language. At most one tasteful emoji. Do NOT put any hashtags inside the description.
+- description: keep it SHORT. ONE punchy sentence, about 60 to 100 characters (never more than ~120), that hooks a scroller and captures the emotional core of the story. Prefer ending on a question or a gut-punch line that invites comments. Match the story's tone; never force hype on a sad or reflective story. Natural, spoken language, at most one tasteful emoji. IMPORTANT: do NOT use em dashes or en dashes (the "—" or "–" characters) anywhere; use commas, periods, or two short sentences instead. Do NOT put any hashtags inside the description.
 - hashtags: EXACTLY 5 hashtags, each WITHOUT the leading "#", lowercase, no spaces or punctuation. Mix 1–2 broad discovery tags with 3–4 niche tags specific to this story's topic and audience. No spammy, banned, or engagement-bait tags.`;
 
 export const CAPTION_TOOL = {
@@ -285,7 +285,7 @@ export const CAPTION_TOOL = {
       description: {
         type: "string",
         description:
-          "Short post caption (1–2 sentences). No hashtags inside it. At most one emoji.",
+          "Short post caption: one punchy sentence (~60 to 100 chars). No em or en dashes. No hashtags. At most one emoji.",
       },
       hashtags: {
         type: "array",
